@@ -408,9 +408,9 @@ denoise = Node(GLM(out_res_name='denoised_residuals.nii',
 # Nuissance regression -ICA AROMA:  
     # motion_parameters, in_file; aggr_denoised_file, nonaggr_denoised_file
     # --> removed 9/27/17 because the included/required masks weren't in the correct space
-ica_aroma = Node(ICA_AROMA(TR=TR,
-                           denoise_type='both'), 
-                 name='ica_aroma')
+#ica_aroma = Node(ICA_AROMA(TR=TR,
+#                           denoise_type='both'), 
+#                 name='ica_aroma')
 
 
 # In[ ]:
