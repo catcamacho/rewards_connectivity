@@ -561,7 +561,7 @@ preprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                      (bandpass,datasink,[('out_file','preproc_func')])        
                     ])
 preprocflow.base_dir = workflow_dir
-preprocflow.write_graph(graph2use='flat')
+preprocflow.write_graph()
 preprocflow.run('MultiProc', plugin_args={'n_procs': 10})
 
 
