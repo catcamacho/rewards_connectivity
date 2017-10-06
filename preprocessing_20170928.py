@@ -57,7 +57,7 @@ slice_direction = 3 #3 = z direction
 interleaved = False
 #all rates are in Hz (1/TR or samples/second)
 highpass_freq = 0.01 #in Hz
-lowpass_freq = 0.1 #in Hz
+lowpass_freq = 1 #in Hz
 
 
 # In[ ]:
