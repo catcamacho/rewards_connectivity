@@ -34,7 +34,7 @@ FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
 #analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Phillips/bars/Cat'
+analysis_home = '/Volumes/Zeus/Cat'
 #raw_dir = analysis_home + '/subjs'
 raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
@@ -205,13 +205,13 @@ def concatenatemotion(motion_files,merged_func):
 def bandpass_filter(in_file, lowpass, highpass, TR):
     import numpy as np
     import nibabel as nb
-    from os import path
+    from os.path import abspath
     from nipype.interfaces.afni.preprocess import Bandpass
     from nipype import config, logging
     config.enable_debug_mode()
     logging.update_logging(config)
     
-    out_file = 'func_filtered.nii'
+    out_file = 'func_filtered'
     bp = Bandpass()
     bp.inputs.highpass = highpass
     bp.inputs.lowpass = lowpass
@@ -221,7 +221,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     bp.inputs.outputtype = 'NIFTI'
     bp.run()
     
-    out_file = path.abspath(out_file)
+    out_file = abspath(out_file + '.nii')
     return(out_file)
 
 
@@ -561,7 +561,7 @@ preprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                      (bandpass,datasink,[('out_file','preproc_func')])        
                     ])
 preprocflow.base_dir = workflow_dir
-preprocflow.write_graph()
+preprocflow.write_graph(graph2use='flat')
 preprocflow.run('MultiProc', plugin_args={'n_procs': 10})
 
 
