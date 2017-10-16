@@ -226,11 +226,10 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     
     filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
     
-    if filtered_file[-1] == 'z':
-        gz = Gunzip()
-        gz.inputs.in_file = filtered_file
-        gz.run()
-        filtered_file = getcwd() +'/func_filtered+orig.BRIK'
+    gz = Gunzip()
+    gz.inputs.in_file = filtered_file
+    gz.run()
+    filtered_file = getcwd() +'/func_filtered+orig.BRIK'
     
     cvt = AFNItoNIFTI()
     cvt.inputs.in_file = filtered_file
@@ -437,6 +436,9 @@ def create_coreg_plot(epi,anat):
     from nipype import config, logging
     config.enable_debug_mode()
     logging.update_logging(config)
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
     from nilearn import plotting
     from nipype.interfaces.nipy.preprocess import Trim
     
@@ -464,8 +466,10 @@ def check_mask_coverage(epi,brainmask):
     from nipype import config, logging
     config.enable_debug_mode()
     logging.update_logging(config)
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
     from nilearn import plotting
-    from PIL import Image
     from numpy import sum, asarray, vstack
     from nipype.interfaces.nipy.preprocess import Trim
     
@@ -485,19 +489,7 @@ def check_mask_coverage(epi,brainmask):
     display.savefig(maskcheck_filename) 
     display.close()
     
-    #images = []
-    #for plane in ['x','y','z']:
-    #    temp = plotting.plot_anat(epi, display_mode=plane, 
-    #                              cut_coords=10,
-    #                              draw_cross=False)
-    #    temp.add_contours(brainmask,levels=[.5], colors='r')
-    #    images.append(temp)
-    
-    #min_shape = sorted( [(sum(i.size), i.size ) for i in images])[0][1]
-    #imgs_comb = vstack( (asarray( i.resize(min_shape) ) for i in images ) )
-    #imgs_comb = Image.fromarray( imgs_comb)
-    #imgs_comb.save(maskcheck_filename)
-    
+
     maskcheck_file = abspath(maskcheck_filename)
 
     return(maskcheck_file)
