@@ -227,7 +227,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
     
     gz = Gunzip()
-    gz.inputs.in_file = filtered_file
+    gz.inputs.in_file = filtered_file[0]
     gz.run()
     filtered_file = getcwd() +'/func_filtered+orig.BRIK'
     
@@ -237,7 +237,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     cvt.run()
     
     out_file = glob(getcwd() + '/*.nii')
-    return(out_file)
+    return(out_file[0])
 
 
 # In[ ]:
