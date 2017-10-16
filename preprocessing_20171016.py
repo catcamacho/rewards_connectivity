@@ -208,7 +208,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     from os.path import abspath
     from os import getcwd
     from nipype.interfaces.afni.preprocess import Bandpass
-    from nipype.interfaces.utils import AFNItoNIFTI
+    from nipype.interfaces.afni.utils import AFNItoNIFTI
     from nipype.algorithms.misc import Gunzip
     from glob import glob
     from nipype import config, logging
