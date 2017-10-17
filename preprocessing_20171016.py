@@ -229,10 +229,10 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     gz = Gunzip()
     gz.inputs.in_file = filtered_file[0]
     gz.run()
-    filtered_file = getcwd() +'/func_filtered+orig.BRIK'
+    new_file = getcwd() +'/func_filtered+orig.BRIK'
     
     cvt = AFNItoNIFTI()
-    cvt.inputs.in_file = filtered_file
+    cvt.inputs.in_file = new_file
     cvt.inputs.outputtype = 'NIFTI'
     cvt.run()
     
