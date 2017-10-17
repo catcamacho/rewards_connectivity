@@ -211,6 +211,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     from nipype.interfaces.afni.utils import AFNItoNIFTI
     from nipype.algorithms.misc import Gunzip
     from glob import glob
+    from subprocess import call
     from nipype import config, logging
     config.enable_debug_mode()
     logging.update_logging(config)
@@ -225,10 +226,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     bp.run()
     
     filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
-    
-    gz = Gunzip()
-    gz.inputs.in_file = filtered_file[0]
-    gz.run()
+    call(["gunzip", filtered_file[0]])
     new_file = getcwd() +'/func_filtered+orig.BRIK'
     
     cvt = AFNItoNIFTI()
@@ -236,8 +234,9 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     cvt.inputs.outputtype = 'NIFTI'
     cvt.run()
     
-    out_file = glob(getcwd() + '/*.nii')
-    return(out_file[0])
+    nii_file = glob(getcwd() + '/*.nii')
+    out_file = nii_file[0]
+    return(out_file)
 
 
 # In[ ]:
