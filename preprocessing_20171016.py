@@ -221,14 +221,10 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
     call(["gunzip", filtered_file[0]])
     new_file = getcwd() +'/func_filtered+orig.BRIK'
-    
-    cvt = AFNItoNIFTI()
-    cvt.inputs.in_file = new_file
-    cvt.inputs.outputtype = 'NIFTI'
-    cvt.run()
-    
-    nii_file = glob(getcwd() + '/*.nii')
-    out_file = nii_file[0]
+    call(["3dAFNItoNIFTI", new_file])
+    nii_file = glob(getcwd() + '/*.nii.gz')
+    call(["gunzip", nii_file])
+    out_file = getcwd() + '/func_filtered.nii'
     return(out_file)
 
 
