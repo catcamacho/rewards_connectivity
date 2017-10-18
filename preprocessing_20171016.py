@@ -217,7 +217,7 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     logging.update_logging(config)
     
     out_file = 'func_filtered'
-    call(['3dBandpass', '-prefix', out_file,'-dt', TR, highpass, lowpass, in_file])
+    call(['3dBandpass', '-prefix', out_file,'-dt', str(TR), str(highpass), str(lowpass), in_file])
     filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
     call(["gunzip", filtered_file[0]])
     new_file = getcwd() +'/func_filtered+orig.BRIK'
