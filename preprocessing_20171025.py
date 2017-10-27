@@ -115,8 +115,8 @@ get_fsID = Node(Function(input_names=['subjid','timepoint'],
                 name='get_fsID')
 
 # Use autorecon1 to skullstrip inputs: T1_files and subject_id; output: brainmask, aseg
-fs_preproc = Node(ReconAll(directive='autorecon2',
-                           flags='-gcut', 
+fs_preproc = Node(ReconAll(directive='autorecon1',
+                           flags='-gcut -autorecon2', 
                            openmp=4), 
                   name='fs_preproc')
 
