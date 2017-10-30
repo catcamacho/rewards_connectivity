@@ -32,10 +32,10 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Zeus/Cat'
-#raw_dir = analysis_home + '/subjs'
-raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+#analysis_home = '/Volumes/Zeus/Cat'
+raw_dir = analysis_home + '/subjs'
+#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
@@ -150,7 +150,7 @@ fsprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                    ])
 fsprocflow.base_dir = workflow_dir
 fsprocflow.write_graph(graph2use='flat')
-fsprocflow.run('MultiProc', plugin_args={'n_procs': 6})
+fsprocflow.run('MultiProc', plugin_args={'n_procs': 3})
 
 
 # In[ ]:
@@ -605,7 +605,7 @@ preprocflow.connect([(infosource,get_fsID,[('subjid','subjid')]),
                     ])
 preprocflow.base_dir = workflow_dir
 preprocflow.write_graph(graph2use='flat')
-preprocflow.run('MultiProc', plugin_args={'n_procs': 6})
+preprocflow.run('MultiProc', plugin_args={'n_procs': 3})
 
 
 # In[ ]:
