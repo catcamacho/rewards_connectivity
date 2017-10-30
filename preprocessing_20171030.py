@@ -18,7 +18,6 @@ from nipype.interfaces.freesurfer import FSCommand
 from nipype.interfaces.fsl.utils import Reorient2Std, Merge
 from nipype.interfaces.fsl.preprocess import MCFLIRT, SliceTimer, FLIRT, FAST
 from nipype.interfaces.fsl.maths import ApplyMask
-#from nipype.interfaces.fsl.ICA_AROMA import ICA_AROMA
 from nipype.algorithms.rapidart import ArtifactDetect
 from nipype.interfaces.fsl.model import GLM
 from nipype.algorithms.confounds import CompCor
@@ -115,8 +114,8 @@ get_fsID = Node(Function(input_names=['subjid','timepoint'],
                          function=numberedsub_convert),
                 name='get_fsID')
 
-# Use autorecon1 to skullstrip inputs: T1_files and subject_id; output: brainmask
-fs_preproc = Node(ReconAll(directive='autorecon1',
+# Use autorecon1 to skullstrip inputs: T1_files and subject_id; output: brainmask, aseg
+fs_preproc = Node(ReconAll(directive='all',
                            flags='-gcut', 
                            openmp=4), 
                   name='fs_preproc')
@@ -128,10 +127,22 @@ convert_anat = Node(MRIConvert(vox_size=(3,3,3),
                                out_type='nii'), 
                     name='convert_anat')
 
+# simultaneously convert to nifti and reslice inputs: in_file outputs: out_file
+convert_aseg = Node(MRIConvert(vox_size=(3,3,3), 
+                               in_type='mgz',
+                               out_file='aseg.nii',
+                               out_type='nii'), 
+                    name='convert_aseg')
+
 # reorient to standard space inputs: in_file, outputs: out_file
 reorient_anat = Node(Reorient2Std(out_file='reoriented_anat.nii',
                                   output_type='NIFTI'), 
                      name='reorient_anat')
+
+# reorient to standard space inputs: in_file, outputs: out_file
+reorient_aseg = Node(Reorient2Std(out_file='reoriented_aseg.nii',
+                                  output_type='NIFTI'), 
+                     name='reorient_aseg')
 
 # binarize anat, dilate 2 and erode 1 to fill gaps. Inputs: in_file; outputs: binary_file
 binarize_anat = Node(Binarize(dilate=2,
@@ -378,7 +389,7 @@ def create_noise_matrix(vols_to_censor,motion_params,comp_noise):
 # Artifact detection for scrubbing/motion assessment
 art = Node(ArtifactDetect(mask_type='file',
                           parameter_source='FSL',
-                          norm_threshold=1.0, #mutually exclusive with rotation and translation thresh
+                          norm_threshold=0.9, #mutually exclusive with rotation and translation thresh
                           zintensity_threshold=3,
                           use_differences=[True, False]),
            name='art')
@@ -504,7 +515,9 @@ preprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                      (infosource,get_fsID,[('timepoint','timepoint')]),
                      (get_fsID,fs_preproc,[('fs_subjid','subject_id')]),
                      (fs_preproc, convert_anat,[('brainmask','in_file')]),
+                     (fs_preproc, convert_aseg,[('aseg','in_file')]),
                      (convert_anat,reorient_anat,[('out_file','in_file')]),
+                     (convert_aseg,reorient_aseg,[('out_file','in_file')]),
                      (reorient_anat,segment,[('out_file','in_files')]),
                      (segment,fix_confs,[('tissue_class_files','masks')]),
                      (fix_confs,compcor,[('vols','mask_files')]),
@@ -550,10 +563,12 @@ preprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                      (make_checkmask_img,datasink,[('maskcheck_file','maskcheck_image')]),
                      (mask_func, datasink,[('out_file','orig_merged_func')]),
                      (reorient_anat,datasink,[('out_file','preproc_anat')]),
+                     (reorient_aseg,datasink,[('out_file','aseg')]),
                      (binarize_anat,datasink,[('binary_file','binarized_anat')]),
                      (merge_motion, datasink,[('newmotion_params','motion_params')]),
                      (noise_mat,datasink,[('noise_filepath','full_noise_mat')]),
                      (art,datasink,[('plot_files','art_plot_files')]),
+                     (art,datasink,[('outlier_files','art_outlier_files')]),
                      (bandpass,datasink,[('out_file','preproc_func')])        
                     ])
 preprocflow.base_dir = workflow_dir
