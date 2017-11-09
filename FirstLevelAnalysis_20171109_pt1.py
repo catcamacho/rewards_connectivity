@@ -25,10 +25,10 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-#analysis_home = '/Volumes/Zeus/Cat'
-raw_dir = analysis_home + '/subjs'
-#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+analysis_home = '/Volumes/Zeus/Cat'
+#raw_dir = analysis_home + '/subjs'
+raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
