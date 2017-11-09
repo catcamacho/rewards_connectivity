@@ -37,12 +37,12 @@ template_dir = analysis_home + '/templates'
 
 MNI_template = template_dir + '/MNI152_T1_2mm_brain.nii'
 #pull subject info to iter over
-#subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
-#subjects_list = subject_info['SubjID'].tolist()
-#timepoints = subject_info['Timepoint'].tolist()
+subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
+subjects_list = subject_info['SubjID'].tolist()
+timepoints = subject_info['Timepoint'].tolist()
 
-subjects_list = [10766]
-timepoints = [1]
+#subjects_list = [10766]
+#timepoints = [1]
 
 # Seeds list- based on aseg segmentation
 L_amyg = 18
@@ -87,7 +87,8 @@ datasource = Node(SelectFiles(template),
 
 #sink important data
 substitutions = [('_subjid_', ''),
-                 ('_timepoint_','_t')]
+                 ('_timepoint_','_t'), 
+                 ('_condition_','')]
 datasink = Node(DataSink(substitutions=substitutions, 
                          base_directory=firstlevel_dir,
                          container=firstlevel_dir), 
@@ -290,92 +291,7 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
-betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
+betaseriesflow.run('MultiProc', plugin_args={'n_procs': 20})
 
 
-# In[ ]:
-
-## Functions for connectivity analysis
-
-# Brightness threshold should be 0.75 * the contrast between the median brain intensity and the background
-def calc_brightness_threshold(func_vol):
-    import nibabel as nib
-    from numpy import median, where
-    
-    from nipype import config, logging
-    config.enable_debug_mode()
-    logging.update_logging(config)
-    
-    func_nifti1 = nib.load(func)
-    func_data = func_nifti1.get_data()
-    func_data = func_data.astype(float)
-    
-    brain_values = where(func_data > 0)
-    median_thresh = median(brain_values)
-    brightness_threshold = 0.75 * median_thresh
-    return(brightness_threshold)
-
-
-# In[ ]:
-
-## Connectivity nodes
-beta_template = {'betas':firstlevel_dir + '/%s_t%d//'}
-beta_grabber = Node(DataGrabber(sort_filelist=True,
-                               template = firstlevel_dir + '',
-                               field_template = beta_template,
-                               base_directory=firstlevel_dir,
-                               infields=['subjid','timepoint'], 
-                               template_args={'timing':[['subjid','timepoint']]}), 
-                    name='beta_grabber')
-
-#condition_template = {'condition_list' = }
-#condition_grabber = Node(SelectFiles(condition_template), name='condition_grabber')
-
-
-# Merge PEs to 1 4D volume per condition
-merge_series = Node(Merge(dimension='t'), 
-                    name='merge_series')
-
-# Make ROI masks
-ROI_mask = Node(Binarize(out_type='nii'), 
-                name='ROI_mask')
-ROI_mask.iterables = [('min',seeds),('max',seeds),('binary_file',seed_names)]
-ROI_mask.synchronize = True
-
-# Extract ROI beta series: input mask and in_file, output out_file
-extract_ROI_betas = Node(ImageMeants(), name='extract_ROI_betas')
-
-# Extract beta connectivity
-beta_series_conn = Node(GLM(out_file='betas.nii',
-                            out_cope='cope.nii'), 
-                        name='beta_series_conn')
-
-# Calculate brightness threshold
-calc_bright_thresh = Node(Function(input_names=['func_vol'],
-                                   output_names=['brightness_threshold'],
-                                   function=calc_brightness_threshold), 
-                          name='calc_bright_thresh')
-
-# Smooth parameter estimates- input brightness_threshold and in_file; output smoothed_file
-smooth = Node(SUSAN(fwhm=smoothing_kernel), 
-              name='smooth')
-
-# Register to MNI space
-reg_anat2mni = Node(FLIRT(out_matrix_file='transform.mat',
-                          reference=MNI_template),
-                    name='reg_anat2mni')
-
-reg_pe2mni = Node(FLIRT(apply_xfm=True,
-                        reference=MNI_template), 
-                  name='reg_pe2mni')
-
-
-# In[ ]:
-
-#connectivityflow = Workflow(name='connectivityflow')
-#connectivityflow.connect([(node,node,[('output','input')]),
-#                         ])
-#connectivityflow.base_dir = workflow_dir
-#connectivityflow.write_graph(graph2use='flat')
-#connectivityflow.run('MultiProc', plugin_args={'n_procs': 2})
 
