@@ -80,7 +80,7 @@ timegrabber = Node(DataGrabber(sort_filelist=True,
 # Grab niftis
 template = {'struct': preproc_dir + '/preproc_anat/{subjid}_t{timepoint}/reoriented_anat.nii',
             'func': preproc_dir + '/preproc_func/{subjid}_t{timepoint}/func_filtered.nii',
-            'segmentation': preproc_dir + '/aseg/{subjid}_t{timepoint}/aseg_reoriented.nii',
+            'segmentation': preproc_dir + '/aseg/{subjid}_t{timepoint}/reoriented_aseg.nii',
             'motion': preproc_dir + '/motion_params/{subjid}_t{timepoint}/allmotion.txt'}
 datasource = Node(SelectFiles(template), 
                   name = 'datasource')
