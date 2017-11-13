@@ -44,8 +44,7 @@ workflow_dir = analysis_home + '/workflows'
 #subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
 #subjects_list = subject_info['SubjID'].tolist()
 #timepoints = subject_info['Timepoint'].tolist()
-subjects_list = [10568,10587,10850,10585,10584,10849,11059,10574,
-                 10406,10567,10845,10565,10558,10872,10529,10871]
+subjects_list = [11257]
 timepoints = [1 for s in subjects_list]
 
 # FreeSurfer set up - change SUBJECTS_DIR 
@@ -153,7 +152,7 @@ fsprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                    ])
 fsprocflow.base_dir = workflow_dir
 fsprocflow.write_graph(graph2use='flat')
-fsprocflow.run('MultiProc', plugin_args={'n_procs': 16})
+#fsprocflow.run('MultiProc', plugin_args={'n_procs': 16})
 
 
 # In[ ]:
