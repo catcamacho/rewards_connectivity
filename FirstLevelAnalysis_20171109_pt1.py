@@ -291,7 +291,7 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
-betaseriesflow.run('MultiProc', plugin_args={'n_procs': 20})
+betaseriesflow.run('MultiProc', plugin_args={'n_procs': 30})
 
 
 

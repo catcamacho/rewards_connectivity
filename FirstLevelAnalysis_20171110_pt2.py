@@ -4,7 +4,6 @@
 # In[ ]:
 
 # Import stuff
-from os.path import join
 from nipype.pipeline.engine import Workflow, Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
@@ -26,10 +25,10 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-#analysis_home = '/Volumes/Zeus/Cat'
-raw_dir = analysis_home + '/subjs'
-#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+analysis_home = '/Volumes/Zeus/Cat'
+#raw_dir = analysis_home + '/subjs'
+raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
@@ -210,12 +209,12 @@ def beta_list(timing_bunch):
     from os.path import abspath
     
     conditions_names = timing_bunch[0].conditions
-    filename = open('beta_condition_names.txt','w')
+    filename = open('betanames.txt','w')
     for line in conditions_names:
         filename.write(line + '\n')
     
     filename.close()
-    condition_file = abspath('beta_condition_names.txt')
+    condition_file = abspath('betanames.txt')
     
     return(condition_file)
 
@@ -265,39 +264,6 @@ extract_betas = Node(FILMGLS(threshold=-1000,
                              smooth_autocorr=False,
                              full_data=True), 
                      name='extract_betas')
-
-
-# In[ ]:
-
-# Connect the workflow
-betaseriesflow = Workflow(name='betaseriesflow')
-betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
-                        (infosource, datasource,[('timepoint','timepoint')]),
-                        (infosource, timegrabber,[('subjid','subjid')]),
-                        (infosource, timegrabber,[('timepoint','timepoint')]),
-                        (timegrabber, pull_timing, [('timing','run_timing_list')]),
-                        (datasource, pull_timing, [('motion','motion')]),
-                        (pull_timing, modelspec, [('timing_bunch','subject_info')]),
-                        (datasource, modelspec, [('func','functional_runs')]),
-                        (pull_timing, define_contrasts, [('timing_bunch','timing_bunch')]),
-                        (define_contrasts, level1design, [('contrasts_list','contrasts')]),
-                        (modelspec, level1design, [('session_info','session_info')]),
-                        (level1design,generateModel, [('ev_files','ev_files')]),
-                        (level1design,generateModel, [('fsf_files','fsf_file')]),
-                        (generateModel,extract_betas, [('design_file','design_file')]),
-                        (generateModel,extract_betas, [('con_file','tcon_file')]),
-                        (datasource,extract_betas, [('func','in_file')]),
-                        (pull_timing,save_beta_list, [('timing_bunch','timing_bunch')]),
-                        
-                        (save_beta_list,datasink, [('condition_file','condition_file')]),
-                        (extract_betas,datasink,[('copes','copes')]),
-                        (extract_betas,datasink,[('param_estimates','betas')]),
-                        (extract_betas,datasink,[('tstats','tstats')]),
-                        (generateModel,datasink,[('design_image','design_image')])
-                       ])
-betaseriesflow.base_dir = workflow_dir
-betaseriesflow.write_graph(graph2use='flat')
-#betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
 
 
 # In[ ]:
@@ -384,8 +350,8 @@ beta_grabber = Node(DataGrabber(sort_filelist=True,
                                template_args={'betas':[['subjid','timepoint']]}), 
                     name='beta_grabber')
 
-condtemplate = {'condition_key':firstlevel_dir + '/condition_file/%s_t%d/*/beta_condition_names.txt'}
-conditionlist_grabber = Node(DataGrabber(template = firstlevel_dir + '/condition_file/%s_t%d/*/beta_condition_names.txt',
+condtemplate = {'condition_key':firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt'}
+conditionlist_grabber = Node(DataGrabber(template = firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt',
                                          sort_filelist=True,
                                          field_template = condtemplate,
                                          base_directory=firstlevel_dir,
