@@ -45,7 +45,7 @@ subjects_list = [10451, 10590, 10604, 10605, 10607, 10626, 10632, 10662,
                  10707, 10790, 10804, 10840, 10841, 10881, 11070, 11145, 
                  11197, 11198, 11257, 11261, 11266, 11273, 11278, 11289,
                  11290, 11295, 11296, 11301]
-timepoints = [1 for a in ]
+timepoints = [1 for a in subjects_list]
 
 # Seeds list- based on aseg segmentation
 L_amyg = 18
