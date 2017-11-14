@@ -37,12 +37,15 @@ template_dir = analysis_home + '/templates'
 
 MNI_template = template_dir + '/MNI152_T1_2mm_brain.nii'
 #pull subject info to iter over
-subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
-subjects_list = subject_info['SubjID'].tolist()
-timepoints = subject_info['Timepoint'].tolist()
+#subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
+#subjects_list = subject_info['SubjID'].tolist()
+#timepoints = subject_info['Timepoint'].tolist()
 
-#subjects_list = [10766]
-#timepoints = [1]
+subjects_list = [10451, 10590, 10604, 10605, 10607, 10626, 10632, 10662, 
+                 10707, 10790, 10804, 10840, 10841, 10881, 11070, 11145, 
+                 11197, 11198, 11257, 11261, 11266, 11273, 11278, 11289,
+                 11290, 11295, 11296, 11301]
+timepoints = [1 for a in ]
 
 # Seeds list- based on aseg segmentation
 L_amyg = 18
