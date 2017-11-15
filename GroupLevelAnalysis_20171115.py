@@ -9,7 +9,9 @@ from nipype.pipeline.engine import Workflow, Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.utils import Merge, ImageMeants
-from nipype.interfaces.fsl.model import Randomise
+from nipype.interfaces.fsl.model import Randomise, Cluster
+from nipype.interfaces.freesurfer.model import Binarize
+from nipype.interfaces.fsl.maths import ApplyMask
 from pandas import DataFrame, Series
 
 # MATLAB setup - Specify path to current SPM and the MATLAB's default mode
@@ -33,7 +35,12 @@ workflow_dir = analysis_home + '/workflows'
 template_dir = analysis_home + '/templates'
 MNI_template = template_dir + '/MNI152_T1_1mm_brain.nii'
 
-conditions = ['punish','reward','neutral']
+#pull subject info to iter over
+subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
+subjects_list = subject_info['SubjID'].tolist()
+timepoints = subject_info['Timepoint'].tolist()
+
+conditions = ['punish','neutral']
 seed_names = ['L_amyg','R_amyg']
 
 # Group analysis files
@@ -82,20 +89,34 @@ randomise = Node(Randomise(tfce=True,
                            num_perm=500),
                  name='randomise')
 
-# Threshold the t corrected p files- add when I need it
+# Threshold the t corrected p files
+binarize_pmap = Node(Binarize(min=0.95), name = 'binarize_pmap')
 
+mask_tstat = Node(ApplyMask(),name='mask_tstat')
+
+# Cluster the results
+cluster_results = Node(Cluster(threshold=2,
+                               out_index_file=True, 
+                               out_localmax_txt_file=True), 
+                       name='cluster_results')
 
 
 # In[ ]:
 
 groupanalysisflow = Workflow(name='groupanalysisflow')
-groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','condition')]),
-                           (conditionsource, betamap_grabber, [('seed','seed')]),
+groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','condition'),
+                                                               ('seed','seed')]),
                            (betamap_grabber, merge, [('beta_maps','in_files')]),
                            (merge, randomise, [('merged_file','in_file')]),
+                           (randomise, binarize_pmap, [('t_corrected_p_files','in_file')]),
+                           (binarize_pmap, mask_tstat, [('binary_file','mask_file')]),
+                           (randomise, mask_tstat, [('tstat_files','in_file')]),
+                           (mask_tstat, cluster_results, [('out_file','in_file')]),
                            
-                           (randomise, datasink, [('t_corrected_p_files','t_corrected_p_files')]),
-                           (randomise, datasink, [('tstat_files','tstat_files')])
+                           (randomise, datasink, [('t_corrected_p_files','t_corrected_p_files'),
+                                                  ('tstat_files','tstat_files')]),
+                           (cluster_results, datasink, [('index_file','cluster_index_file'), 
+                                                        ('localmax_txt_file','cluster_localmax_txt_file')])
                           ])
 groupanalysisflow.basedir = workflow_dir
 groupanalysisflow.write_graph(graph2use='flat')
