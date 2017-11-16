@@ -124,5 +124,5 @@ groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','con
                           ])
 groupanalysisflow.basedir = workflow_dir
 groupanalysisflow.write_graph(graph2use='flat')
-groupanalysisflow.run('Multiproc', plugin_args={'n_procs':20})
+groupanalysisflow.run('MultiProc', plugin_args={'n_procs':20})
 
