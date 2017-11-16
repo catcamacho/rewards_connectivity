@@ -127,6 +127,7 @@ groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','con
                            
                            (randomise, datasink, [('t_corrected_p_files','t_corrected_p_files'),
                                                   ('tstat_files','tstat_files')]),
+                           (mask_tstat, datasink,[('out_file','masked_tstat_files')]),
                            (cluster_results, datasink, [('index_file','cluster_index_file'), 
                                                         ('localmax_txt_file','cluster_localmax_txt_file')])
                           ])
