@@ -50,9 +50,11 @@ nonDevSex = analysis_home + '/misc/NonDevSex_groups.mat'
 MCage_con = analysis_home + '/misc/tcon_MCage.con'
 MCageSq_con = analysis_home + '/misc/tcon_MCageSq.con'
 nonDevSex_con = analysis_home + '/misc/tcon_NonDevSex.con'
+MCageInv = analysis_home + '/misc/MCageInv_groups.mat'
+MCageInv_con = analysis_home + '/misc/tcon_MCageInv.con'
 
-group_designs = [MCage, MCageSq, nonDevSex]
-contrasts = [MCage_con, MCageSq_con, nonDevSex_con]
+group_designs = [MCage, MCageSq, nonDevSex, MCageInv]
+contrasts = [MCage_con, MCageSq_con, nonDevSex_con, MCageInv_con]
 
 
 # In[ ]:
@@ -76,7 +78,8 @@ betamap_grabber = Node(DataGrabber(sort_filelist=True,
 # Sink relavent data
 substitutions = [('_condition_',''),
                  ('_seed_',''), 
-                 ('_design_mat_..Volumes..Zeus..Cat..misc..','')]
+                 ('_design_mat_..Volumes..Zeus..Cat..misc..',''), 
+                 ('_tcon_..Volumes..Zeus..Cat..misc..tcon_','')]
 datasink = Node(DataSink(substitutions=substitutions, 
                          base_directory=secondlevel_dir,
                          container=secondlevel_dir), 
@@ -129,5 +132,5 @@ groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','con
                           ])
 groupanalysisflow.base_dir = workflow_dir
 groupanalysisflow.write_graph(graph2use='flat')
-groupanalysisflow.run('MultiProc', plugin_args={'n_procs':20})
+groupanalysisflow.run('MultiProc', plugin_args={'n_procs':24})
 
