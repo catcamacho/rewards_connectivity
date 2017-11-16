@@ -5,7 +5,7 @@
 
 # Import stuff
 from os.path import join
-from nipype.pipeline.engine import Workflow, Node
+from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.utils import Merge, ImageMeants
@@ -47,9 +47,12 @@ seed_names = ['L_amyg','R_amyg']
 MCage = analysis_home + '/misc/MCage_groups.mat'
 MCageSq = analysis_home + '/misc/MCageSq_groups.mat'
 nonDevSex = analysis_home + '/misc/NonDevSex_groups.mat'
+MCage_con = analysis_home + '/misc/tcon_MCage.con'
+MCageSq_con = analysis_home + '/misc/tcon_MCageSq.con'
+nonDevSex_con = analysis_home + '/misc/tcon_NonDevSex.con'
 
 group_designs = [MCage, MCageSq, nonDevSex]
-t_contrasts = analysis_home + '/misc/tcon.con'
+contrasts = [MCage_con, MCageSq_con, nonDevSex_con]
 
 
 # In[ ]:
@@ -72,7 +75,8 @@ betamap_grabber = Node(DataGrabber(sort_filelist=True,
 
 # Sink relavent data
 substitutions = [('_condition_',''),
-                 ('_seed_','')]
+                 ('_seed_',''), 
+                 ('_design_mat_..Volumes..Zeus..Cat..misc..','')]
 datasink = Node(DataSink(substitutions=substitutions, 
                          base_directory=secondlevel_dir,
                          container=secondlevel_dir), 
@@ -87,22 +91,23 @@ datasink = Node(DataSink(substitutions=substitutions,
 merge = Node(Merge(dimension = 't'),name='merge')
 
 # Carry out t tests with permutation testing
-randomise = Node(Randomise(tfce=True, 
-                           tcon=t_contrasts, 
+randomise = Node(Randomise(tfce=True,  
                            num_perm=1000),
                  name='randomise')
-randomise.iterables = [('design_mat',group_designs)]
+randomise.iterables = [('design_mat',group_designs), ('tcon', contrasts)]
+randomise.synchronize = True
 
 # Threshold the t corrected p files
-binarize_pmap = Node(Binarize(min=0.95), name = 'binarize_pmap')
+binarize_pmap = MapNode(Binarize(min=0.95), name = 'binarize_pmap', iterfield=['in_file'])
 
-mask_tstat = Node(ApplyMask(),name='mask_tstat')
+mask_tstat = MapNode(ApplyMask(),name='mask_tstat', iterfield=['in_file','mask_file'])
 
 # Cluster the results
-cluster_results = Node(Cluster(threshold=2,
-                               out_index_file=True, 
-                               out_localmax_txt_file=True), 
-                       name='cluster_results')
+cluster_results = MapNode(Cluster(threshold=2,
+                                  out_index_file=True,
+                                  out_localmax_txt_file=True),
+                          name='cluster_results', 
+                          iterfield = ['in_file'])
 
 
 # In[ ]:
