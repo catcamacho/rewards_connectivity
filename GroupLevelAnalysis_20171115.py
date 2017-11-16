@@ -44,7 +44,11 @@ conditions = ['punish','neutral']
 seed_names = ['L_amyg','R_amyg']
 
 # Group analysis files
-group_design = analysis_home + '/misc/groups.mat'
+MCage = analysis_home + '/misc/MCage_groups.mat'
+MCageSq = analysis_home + '/misc/MCageSq_groups.mat'
+nonDevSex = analysis_home + '/misc/NonDevSex_groups.mat'
+
+group_designs = [MCage, MCageSq, nonDevSex]
 t_contrasts = analysis_home + '/misc/tcon.con'
 
 
@@ -84,10 +88,10 @@ merge = Node(Merge(dimension = 't'),name='merge')
 
 # Carry out t tests with permutation testing
 randomise = Node(Randomise(tfce=True, 
-                           design_mat=group_design, 
                            tcon=t_contrasts, 
-                           num_perm=500),
+                           num_perm=1000),
                  name='randomise')
+randomise.iterable = [('design_mat',group_designs)]
 
 # Threshold the t corrected p files
 binarize_pmap = Node(Binarize(min=0.95), name = 'binarize_pmap')
@@ -120,5 +124,5 @@ groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','con
                           ])
 groupanalysisflow.basedir = workflow_dir
 groupanalysisflow.write_graph(graph2use='flat')
-groupanalysisflow.run('Multiproc', plugin_args={'n_procs':2})
+groupanalysisflow.run('Multiproc', plugin_args={'n_procs':20})
 
