@@ -122,7 +122,7 @@ groupanalysisflow.connect([(conditionsource, betamap_grabber, [('condition','con
                            (cluster_results, datasink, [('index_file','cluster_index_file'), 
                                                         ('localmax_txt_file','cluster_localmax_txt_file')])
                           ])
-groupanalysisflow.basedir = workflow_dir
+groupanalysisflow.base_dir = workflow_dir
 groupanalysisflow.write_graph(graph2use='flat')
 groupanalysisflow.run('MultiProc', plugin_args={'n_procs':20})
 
