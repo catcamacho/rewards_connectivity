@@ -91,7 +91,7 @@ randomise = Node(Randomise(tfce=True,
                            tcon=t_contrasts, 
                            num_perm=1000),
                  name='randomise')
-randomise.iterable = [('design_mat',group_designs)]
+randomise.iterables = [('design_mat',group_designs)]
 
 # Threshold the t corrected p files
 binarize_pmap = Node(Binarize(min=0.95), name = 'binarize_pmap')
