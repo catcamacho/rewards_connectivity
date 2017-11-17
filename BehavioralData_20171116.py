@@ -42,7 +42,7 @@ def timing_bars(run_timing_list,motion, motion_thresh, BOLD_window, subjid, time
         if sum(excess_vols) >= 3:
             df_complete.loc[index,'mot_cat'] = 'high'
     
-    df_complete.to_csv(behavior_dir + str(subjid) + '_cleaned_behavioral_data.csv')
+    #df_complete.to_csv(behavior_dir + str(subjid) + '_cleaned_behavioral_data.csv')
 
     df_trials = df_complete[df_complete.loc[:,'stim']=='cue']
     df_usabletrials = df_trials[df_trials.loc[:,'mot_cat']=='low']
@@ -55,6 +55,7 @@ def timing_bars(run_timing_list,motion, motion_thresh, BOLD_window, subjid, time
 # In[ ]:
 
 from pandas import DataFrame, Series
+import matplotlib.pyplot as plt 
 from glob import glob
 
 #analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
@@ -77,7 +78,10 @@ BOLD_window = 8
 summary_data = DataFrame()
 summary_data.loc[:,'subjid'] = Series(subjects_list,index=None)
 summary_data.loc[:,'timepoint'] = Series(timepoints,index=summary_data.index)
-summary_data = summary_data.reindex(columns= summary_data.columns.tolist() + ['num_use_total','lat_total','num_use_neut','mean_lat_neut','num_use_pun','mean_lat_pun'])
+summary_data = summary_data.reindex(columns= summary_data.columns.tolist() + 
+                                    ['num_use_total','lat_total','lat_total_std','num_use_neut',
+                                     'mean_lat_neut','std_lat_neut','num_use_pun','mean_lat_pun',
+                                     'std_lat_pun','mot_all','mot_pun','mot_neut'])
 
 for subjid in subjects_list:
     sub_index = summary_data[summary_data['subjid']==subjid].index[0]
@@ -91,12 +95,19 @@ for subjid in subjects_list:
     
     summary_data.loc[sub_index,'num_use_total'] = subject_df.shape[0]
     summary_data.loc[sub_index,'lat_total'] = subject_df['lat'].mean()
+    summary_data.loc[sub_index,'lat_total_std'] = subject_df['lat'].std()
     summary_data.loc[sub_index,'num_use_neut'] = sub_neut.shape[0]
     summary_data.loc[sub_index,'mean_lat_neut'] = sub_neut['lat'].mean()
+    summary_data.loc[sub_index,'std_lat_neut'] = sub_neut['lat'].std()
     summary_data.loc[sub_index,'num_use_pun'] = sub_pun.shape[0]
     summary_data.loc[sub_index,'mean_lat_pun'] = sub_pun['lat'].mean()
+    summary_data.loc[sub_index,'std_lat_pun'] = sub_pun['lat'].std()
+    summary_data.loc[sub_index,'mot_pun'] = sub_pun['motion'].mean()
+    summary_data.loc[sub_index,'mot_neut'] = sub_neut['motion'].mean()
+    summary_data.loc[sub_index,'mot_all'] = subject_df['motion'].mean()
     
 summary_data.to_csv(behavior_dir + 'fullsample_means.csv')
+
 
 
 
