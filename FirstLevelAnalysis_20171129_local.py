@@ -4,13 +4,13 @@
 # In[ ]:
 
 # Import stuff
-from os.path import join
 from nipype.pipeline.engine import Workflow, Node
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.preprocess import FLIRT, SUSAN
 from nipype.interfaces.fsl.utils import Merge, ImageMeants
 from nipype.interfaces.fsl.model import GLM, Level1Design, FEATModel, FILMGLS
+from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces.freesurfer.model import Binarize
 from pandas import DataFrame, Series
@@ -25,27 +25,26 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Zeus/Cat'
-#raw_dir = analysis_home + '/subjs'
-raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+#analysis_home = '/Volumes/Zeus/Cat'
+raw_dir = analysis_home + '/subjs'
+#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
 workflow_dir = analysis_home + '/workflows'
 template_dir = analysis_home + '/templates'
 
-MNI_template = template_dir + '/MNI152_T1_2mm_brain.nii'
-#pull subject info to iter over
-#subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
-#subjects_list = subject_info['SubjID'].tolist()
-#timepoints = subject_info['Timepoint'].tolist()
+MNI_template = template_dir + '/MNI152_T1_3mm_brain.nii'
+MNI_mask = template_dir + '/MNI152_T1_3mm_mask.nii'
 
-subjects_list = [10451, 10590, 10604, 10605, 10607, 10626, 10632, 10662, 
-                 10707, 10790, 10804, 10840, 10841, 10881, 11070, 11145, 
-                 11197, 11198, 11257, 11261, 11266, 11273, 11278, 11289,
-                 11290, 11295, 11296, 11301]
-timepoints = [1 for a in subjects_list]
+#pull subject info to iter over
+subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
+subjects_list = subject_info['SubjID'].tolist()
+timepoints = subject_info['Timepoint'].tolist()
+
+#subjects_list = [10766]
+#timepoints = [1]
 
 # Seeds list- based on aseg segmentation
 L_amyg = 18
@@ -60,6 +59,7 @@ conditions = ['punish','reward','neutral']
 motion_thresh = 0.9 #in millimeters for trial-wise exclusion of data
 BOLD_window = 8 # in TRs
 smoothing_kernel = 6
+min_trials_for_usability = 20 #per condition, selected based on Paulsen 2015
 
 
 # In[ ]:
@@ -91,17 +91,19 @@ datasource = Node(SelectFiles(template),
 #sink important data
 substitutions = [('_subjid_', ''),
                  ('_timepoint_','_t'), 
-                 ('_condition_','')]
+                 ('_condition_',''),
+                 ('_max_18_min_18','L_amyg'), 
+                 ('_max_54_min_54','R_amyg')]
 datasink = Node(DataSink(substitutions=substitutions, 
                          base_directory=firstlevel_dir,
                          container=firstlevel_dir), 
                 name='datasink')
 
 
-# In[2]:
+# In[ ]:
 
 # Extract timing for Beta Series Method- mark trials as high and low motion
-def timing_bars(run_timing_list, condition, motion, motion_thresh, BOLD_window):
+def timing_bars(run_timing_list, motion, motion_thresh, BOLD_window):
     from nipype import config, logging
     config.enable_debug_mode()
     logging.update_logging(config)
@@ -111,7 +113,8 @@ def timing_bars(run_timing_list, condition, motion, motion_thresh, BOLD_window):
     
     # Import and organize motion data
     motion_df = read_table(motion,delim_whitespace=True,header=None)
-    mean_translation = motion_df[[3,4,5]].mean(axis=1)
+    max_translation = motion_df[[3,4,5]].abs()
+    max_translation = max_translation.max(axis=1)
     
     # Create full task dataframe
     run_timing_list = sorted(run_timing_list)
@@ -124,51 +127,104 @@ def timing_bars(run_timing_list, condition, motion, motion_thresh, BOLD_window):
         k = k+1
     df_full = concat(dfs,ignore_index=True)
     df_full = df_full.sort(['runNum','time_hyp'], ascending=[1,1])
-    df_full.loc[:,'motion'] = mean_translation
+    df_full.loc[:,'motion'] = max_translation
     
     # Sort out trials that are both complete and received a response
-    df_responded = df_full[df_full.loc[:,'Count'] == 1]
-    df_responded = df_responded[df_responded.loc[:,'catch']==0]
+    #df_responded = df_full[df_full.loc[:,'Count'] == 1]
+    #df_responded = df_responded[df_responded.loc[:,'catch']==0]
 
     # Sort out trial onsets for the condition of interest
-    df_condition = df_responded[df_responded.loc[:,'cond']==condition]
-    df_condition = df_condition[df_condition.loc[:,'stim']=='cue']
+    #df_condition = df_responded[df_responded.loc[:,'cond']==condition]
+    df_trial = df_full[df_full.loc[:,'stim']=='cue']
     
     # Add additional label to the trials with high motion
-    df_condition.loc[:,'mot_cat'] = Series('low',index=df_condition.index)
-    for index, row in df_condition.iterrows():
+    df_trial.loc[:,'mot_cat'] = Series('low',index=df_trial.index)
+    for index, row in df_trial.iterrows():
         hrf_length = index+BOLD_window
         trial_motion = df_full.iloc[index:hrf_length,8]
-        excess_vols = (trial_motion >= motion_thresh) + (trial_motion <= (-1*motion_thresh))
-        if sum(excess_vols) >= 4:
-            df_condition.loc[index,'mot_cat'] = 'high'    
+        excess_vols = (trial_motion >= motion_thresh)
+        if sum(excess_vols) >= 3:
+            df_trial.loc[index,'mot_cat'] = 'high'    
     
-    lowmotion = df_condition[df_condition.loc[:, 'mot_cat'] == 'low']
-    highmotion = df_condition[df_condition.loc[:, 'mot_cat'] == 'high']
+    df_fulltrials = df_trial[df_trial.loc[:, 'catch'] == 0]
+    df_responded = df_fulltrials[df_fulltrials.loc[:, 'Count'] == 1]
+    
+    lowmotion = df_responded[df_trial.loc[:, 'mot_cat'] == 'low']
+    highmotion = df_responded[df_trial.loc[:, 'mot_cat'] == 'high']
+    catch1 = df_trial[df_trial.loc[:, 'catch'] == 1]
+    catch2 = df_trial[df_trial.loc[:, 'catch'] == 2]
     
     # create onsets list
     lm_onsets = lowmotion['time_hyp'].tolist()
     hm_onsets = highmotion['time_hyp'].tolist()
+    catch1_onsets = catch1['time_hyp'].tolist()
+    catch2_onsets = catch2['time_hyp'].tolist()
     lm_onsets_list = [[o] for o in lm_onsets]
     hm_onsets_list = [[p] for p in hm_onsets]
-    onsets = lm_onsets_list + hm_onsets_list
+    c1_onsets_list = [[q] for q in catch1_onsets]
+    c2_onsets_list = [[r] for r in catch2_onsets]
+    onsets = lm_onsets_list + hm_onsets_list + c1_onsets_list + c2_onsets_list
     
     # create trial names
-    lm_trialnames = [(condition + '_lm' + str(h)) for h in range(0,len(lm_onsets_list))]
-    hm_trialnames = [(condition + '_hm' + str(i)) for i in range(0,len(hm_onsets_list))]
-    trialNames = lm_trialnames + hm_trialnames
+    lm_conditions = lowmotion['cond'].tolist()
+    hm_conditions = highmotion['cond'].tolist()
+    lm_trialnames = [(lm_conditions[h] + '_lm' + str(h)) for h in range(0,len(lm_onsets_list))]
+    hm_trialnames = [(hm_conditions[i] + '_hm' + str(i)) for i in range(0,len(hm_onsets_list))]
+    catch1_trialnames = [('catch1_' + str(j)) for j in range(0,len(c1_onsets_list))]
+    catch2_trialnames = [('catch2_' + str(k)) for k in range(0,len(c2_onsets_list))]
+    
+    trialNames = lm_trialnames + hm_trialnames + catch1_trialnames + catch2_trialnames
+    
+    # creat durations list
+    fulltrials = lm_trialnames + hm_trialnames
+    fulltrial_durations = [[4.5] for s in fulltrials]
+    c1_durations = [[1.5] for t in catch1_trialnames]
+    c2_durations = [[3.0] for u in catch2_trialnames]
+    durations = fulltrial_durations + c1_durations + c2_durations
     
     #make bunch file
     timing_bunch = []
     timing_bunch.insert(0,Bunch(conditions=trialNames,
                                 onsets=onsets,
-                                durations=[[4.5] for s in trialNames],
+                                durations=durations,
                                 amplitudes=None,
                                 tmod=None,
                                 pmod=None,
                                 regressor_names=None,
                                 regressors=None))
     return(timing_bunch)
+
+def hrf_fitting_onsets(timing_bunch):
+    from nipype import config, logging
+    config.enable_debug_mode()
+    logging.update_logging(config)
+    
+    from nipype.interfaces.base import Bunch
+    from pandas import DataFrame,Series,read_table,concat
+    
+    conditions_names = timing_bunch[0].conditions
+    onsets = [a for [a] in timing_bunch[0].onsets]
+    durations = [b for [b] in timing_bunch[0].durations]
+    
+    #remove catch trials
+    num_cons = len(conditions_names)
+    r = 0
+    for i in range(0,num_cons):
+        if 'catch' in conditions_names[i]:
+            del onsets[i-r]
+            del durations[i-r]
+            r = r + 1
+        
+    hrf_fit_bunch = []
+    hrf_fit_bunch.insert(0,Bunch(conditions=['HR_Event'],
+                                 onsets=[onsets],
+                                 durations=[durations],
+                                 amplitudes=None,
+                                 tmod=None,
+                                 pmod=None,
+                                 regressor_names=None,
+                                 regressors=None))
+    return(hrf_fit_bunch)
 
 # Function to create contrast lists from a bunch file
 def beta_contrasts(timing_bunch):
@@ -207,12 +263,12 @@ def beta_list(timing_bunch):
     from os.path import abspath
     
     conditions_names = timing_bunch[0].conditions
-    filename = open('beta_condition_names.txt','w')
+    filename = open('betanames.txt','w')
     for line in conditions_names:
         filename.write(line + '\n')
     
     filename.close()
-    condition_file = abspath('beta_condition_names.txt')
+    condition_file = abspath('betanames.txt')
     
     return(condition_file)
 
@@ -220,13 +276,12 @@ def beta_list(timing_bunch):
 # In[ ]:
 
 # Extract timing
-pull_timing = Node(Function(input_names=['run_timing_list','condition',
-                                         'motion','motion_thresh','BOLD_window'],
+pull_timing = Node(Function(input_names=['run_timing_list','motion',
+                                         'motion_thresh','BOLD_window'],
                             output_names=['timing_bunch'],
                             function=timing_bars), name='pull_timing')
 pull_timing.inputs.BOLD_window = BOLD_window
 pull_timing.inputs.motion_thresh = motion_thresh
-pull_timing.iterables = [('condition',conditions)]
 
 # create the list of T-contrasts
 define_contrasts = Node(Function(input_names=['timing_bunch'], 
@@ -266,6 +321,46 @@ extract_betas = Node(FILMGLS(threshold=-1000,
 
 # In[ ]:
 
+## Find voxels associated with task at any level. Use this as an HRF fit mask
+# pull timing
+
+hrffit_timing = Node(Function(input_names=['timing_bunch'], 
+                              output_names=['hrf_fit_bunch'], 
+                              function=hrf_fitting_onsets), 
+                     name='hrffit_timing')
+
+# create the list of T-contrasts
+define_hrffit_con = Node(Function(input_names=['timing_bunch'], 
+                                  output_names = ['contrasts_list'], 
+                                  function=beta_contrasts),
+                         name = 'define_hrffit_con')
+
+# Specify FSL model - input bunch file called subject_info
+hrffit_model = Node(SpecifyModel(time_repetition=TR,
+                                 input_units='secs',
+                                 high_pass_filter_cutoff=0),
+                    name='hrffit_model')
+
+# Generate a level 1 design
+hrffitdesign = Node(Level1Design(bases={'dgamma':{'derivs': False}},
+                                 interscan_interval=TR, # the TR
+                                 model_serial_correlations=True), 
+                    name='hrffitdesign')
+
+# Estimate Level 1
+genHRFfitModel = Node(FEATModel(), 
+                      name='genHRFfitModel')
+
+# Run GLM
+HRFfitting = Node(FILMGLS(threshold=-1000, 
+                          fit_armodel=False,
+                          smooth_autocorr=False,
+                          full_data=True), 
+                  name='HRFfitting')
+
+
+# In[ ]:
+
 # Connect the workflow
 betaseriesflow = Workflow(name='betaseriesflow')
 betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
@@ -286,15 +381,27 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (datasource,extract_betas, [('func','in_file')]),
                         (pull_timing,save_beta_list, [('timing_bunch','timing_bunch')]),
                         
+                        (pull_timing, hrffit_timing,[('timing_bunch','timing_bunch')]),
+                        (hrffit_timing, hrffit_model, [('hrf_fit_bunch','subject_info')]),
+                        (datasource, hrffit_model, [('func','functional_runs')]),
+                        (hrffit_timing, define_hrffit_con, [('hrf_fit_bunch','timing_bunch')]),
+                        (define_hrffit_con, hrffitdesign, [('contrasts_list','contrasts')]),
+                        (hrffit_model, hrffitdesign, [('session_info','session_info')]),
+                        (hrffitdesign,genHRFfitModel, [('ev_files','ev_files')]),
+                        (hrffitdesign,genHRFfitModel, [('fsf_files','fsf_file')]),
+                        (genHRFfitModel,HRFfitting, [('design_file','design_file')]),
+                        (genHRFfitModel,HRFfitting, [('con_file','tcon_file')]),
+                        (datasource,HRFfitting, [('func','in_file')]),
+                        
                         (save_beta_list,datasink, [('condition_file','condition_file')]),
                         (extract_betas,datasink,[('copes','copes')]),
                         (extract_betas,datasink,[('param_estimates','betas')]),
                         (extract_betas,datasink,[('tstats','tstats')]),
-                        (generateModel,datasink,[('design_image','design_image')])
+                        (generateModel,datasink,[('design_image','design_image')]),
+                        (HRFfitting,datasink,[('param_estimates','HRFfit_betas')]),
+                        (HRFfitting,datasink,[('copes','HRFfit_copes')]),
+                        (HRFfitting,datasink,[('tstats','HRFfit_tstats')])
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
-betaseriesflow.run('MultiProc', plugin_args={'n_procs': 30})
-
-
-
+betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
