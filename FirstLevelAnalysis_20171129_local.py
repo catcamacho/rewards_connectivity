@@ -4,7 +4,7 @@
 # In[ ]:
 
 # Import stuff
-from nipype.pipeline.engine import Workflow, Node
+from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.preprocess import FLIRT, SUSAN
@@ -80,11 +80,20 @@ timegrabber = Node(DataGrabber(sort_filelist=True,
                                template_args={'timing':[['subjid','timepoint']]}), 
                    name='timegrabber')
 
+# FD motion grabber
+motion_template = {'motion':preproc_dir + '/FD_out_metric_values/%s_t%d/*/FD.txt'}
+motiongrabber = Node(DataGrabber(sort_filelist=True,
+                                 template = preproc_dir + '/FD_out_metric_values/%s_t%d/*/FD.txt',
+                                 field_template = motion_template,
+                                 base_directory=preproc_dir,
+                                 infields=['subjid','timepoint'], 
+                                 template_args={'motion':[['subjid','timepoint']]}),
+                     name='motiongrabber')
+
 # Grab niftis
 template = {'struct': preproc_dir + '/preproc_anat/{subjid}_t{timepoint}/reoriented_anat.nii',
             'func': preproc_dir + '/preproc_func/{subjid}_t{timepoint}/func_filtered.nii',
-            'segmentation': preproc_dir + '/aseg/{subjid}_t{timepoint}/reoriented_aseg.nii',
-            'motion': preproc_dir + '/motion_params/{subjid}_t{timepoint}/allmotion.txt'}
+            'segmentation': preproc_dir + '/aseg/{subjid}_t{timepoint}/reoriented_aseg.nii'}
 datasource = Node(SelectFiles(template), 
                   name = 'datasource')
 
@@ -112,9 +121,8 @@ def timing_bars(run_timing_list, motion, motion_thresh, BOLD_window):
     from nipype.interfaces.base import Bunch
     
     # Import and organize motion data
-    motion_df = read_table(motion,delim_whitespace=True,header=None)
-    max_translation = motion_df[[3,4,5]].abs()
-    max_translation = max_translation.max(axis=1)
+    motion_dfs = [ read_table(j,delim_whitespace=True,header=None) for j in motion ]
+    motion_fd = concat(motion_dfs,ignore_index=True)
     
     # Create full task dataframe
     run_timing_list = sorted(run_timing_list)
@@ -127,7 +135,7 @@ def timing_bars(run_timing_list, motion, motion_thresh, BOLD_window):
         k = k+1
     df_full = concat(dfs,ignore_index=True)
     df_full = df_full.sort(['runNum','time_hyp'], ascending=[1,1])
-    df_full.loc[:,'motion'] = max_translation
+    df_full.loc[:,'motion'] = motion_fd
     
     # Sort out trials that are both complete and received a response
     #df_responded = df_full[df_full.loc[:,'Count'] == 1]
@@ -200,7 +208,7 @@ def hrf_fitting_onsets(timing_bunch):
     logging.update_logging(config)
     
     from nipype.interfaces.base import Bunch
-    from pandas import DataFrame,Series,read_table,concat
+    from pandas import DataFrame,Series,read_table
     
     conditions_names = timing_bunch[0].conditions
     onsets = [a for [a] in timing_bunch[0].onsets]
@@ -214,7 +222,7 @@ def hrf_fitting_onsets(timing_bunch):
             del onsets[i-r]
             del durations[i-r]
             r = r + 1
-        
+    
     hrf_fit_bunch = []
     hrf_fit_bunch.insert(0,Bunch(conditions=['HR_Event'],
                                  onsets=[onsets],
@@ -358,6 +366,11 @@ HRFfitting = Node(FILMGLS(threshold=-1000,
                           full_data=True), 
                   name='HRFfitting')
 
+thresh_HRFfit_map = MapNode(Binarize(abs=True, 
+                                     min=0.3),
+                            name='thresh_HRFfit_map', 
+                            iterfield = ['in_file'])
+
 
 # In[ ]:
 
@@ -367,8 +380,10 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (infosource, datasource,[('timepoint','timepoint')]),
                         (infosource, timegrabber,[('subjid','subjid')]),
                         (infosource, timegrabber,[('timepoint','timepoint')]),
+                        (infosource, motiongrabber,[('subjid','subjid')]),
+                        (infosource, motiongrabber,[('timepoint','timepoint')]),
                         (timegrabber, pull_timing, [('timing','run_timing_list')]),
-                        (datasource, pull_timing, [('motion','motion')]),
+                        (motiongrabber, pull_timing, [('motion','motion')]),
                         (pull_timing, modelspec, [('timing_bunch','subject_info')]),
                         (datasource, modelspec, [('func','functional_runs')]),
                         (pull_timing, define_contrasts, [('timing_bunch','timing_bunch')]),
@@ -387,11 +402,12 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (hrffit_timing, define_hrffit_con, [('hrf_fit_bunch','timing_bunch')]),
                         (define_hrffit_con, hrffitdesign, [('contrasts_list','contrasts')]),
                         (hrffit_model, hrffitdesign, [('session_info','session_info')]),
-                        (hrffitdesign,genHRFfitModel, [('ev_files','ev_files')]),
-                        (hrffitdesign,genHRFfitModel, [('fsf_files','fsf_file')]),
-                        (genHRFfitModel,HRFfitting, [('design_file','design_file')]),
-                        (genHRFfitModel,HRFfitting, [('con_file','tcon_file')]),
+                        (hrffitdesign, genHRFfitModel, [('ev_files','ev_files')]),
+                        (hrffitdesign, genHRFfitModel, [('fsf_files','fsf_file')]),
+                        (genHRFfitModel, HRFfitting, [('design_file','design_file')]),
+                        (genHRFfitModel, HRFfitting, [('con_file','tcon_file')]),
                         (datasource,HRFfitting, [('func','in_file')]),
+                        (HRFfitting, thresh_HRFfit_map, [('param_estimates','in_file')]),
                         
                         (save_beta_list,datasink, [('condition_file','condition_file')]),
                         (extract_betas,datasink,[('copes','copes')]),
@@ -400,8 +416,198 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (generateModel,datasink,[('design_image','design_image')]),
                         (HRFfitting,datasink,[('param_estimates','HRFfit_betas')]),
                         (HRFfitting,datasink,[('copes','HRFfit_copes')]),
-                        (HRFfitting,datasink,[('tstats','HRFfit_tstats')])
+                        (HRFfitting,datasink,[('tstats','HRFfit_tstats')]),
+                        (thresh_HRFfit_map, datasink, [('binary_file','HRFfitMask')])
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
 betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
+
+
+# In[ ]:
+
+## Functions for connectivity analysis
+
+# Brightness threshold should be 0.75 * the contrast between the median brain intensity and the background
+def calc_brightness_threshold(func_vol):
+    import nibabel as nib
+    from numpy import median, where
+    
+    from nipype import config, logging
+    config.enable_debug_mode()
+    logging.update_logging(config)
+    
+    func_nifti1 = nib.load(func_vol)
+    func_data = func_nifti1.get_data()
+    func_data = func_data.astype(float)
+    
+    brain_values = where(func_data > 0)
+    median_thresh = median(brain_values)
+    brightness_threshold = 0.75 * median_thresh
+    return(brightness_threshold)
+
+def sort_beta_series(betas, condition, condition_key):
+    from nipype import config, logging
+    config.enable_debug_mode()
+    logging.update_logging(config)
+    from os.path import dirname
+    
+    cond_betas = []
+    for s in betas:
+        if condition in s:
+            cond_betas.append(s)
+
+    num_pes = len(cond_betas)
+    beta_dir = dirname(cond_betas[0])
+
+    for t in condition_key:
+        if condition in t:
+            text_file = open(t, 'r')
+            cond_keys = text_file.read().splitlines()
+            text_file.close()
+
+    beta_list = []
+    for u in range(0,len(cond_keys)):
+        if 'lm' in cond_keys[u]:
+            beta_list.append(beta_dir + '/pe' + str(u+1) + '.nii')
+
+    return(beta_list)
+
+def check_beta_power(beta_list, ntrial_min):
+    from nipype import config, logging
+    config.enable_debug_mode()
+    logging.update_logging(config)
+    from os.path import abspath
+        
+    if len(beta_list) < ntrial_min:
+        f= open('FAIL.txt','w')
+        f.write('subject only has ' + str(len(beta_list)) + 
+                ' usable trials, which is fewer than the minimum ' + str(ntrial_min))
+        f.close()
+        power_det = abspath('FAIL.txt')
+    else:
+        f= open('pass.txt','w')
+        f.write('subject has ' + str(len(beta_list)) + ' usable trials.')
+        f.close()
+        power_det = abspath('pass.txt')
+    
+    return(power_det)
+
+
+# In[ ]:
+
+## Connectivity nodes
+
+# grab files
+beta_template = {'betas':firstlevel_dir + '/betas/%s_t%d/*/pe*.nii'}
+beta_grabber = Node(DataGrabber(sort_filelist=True,
+                               template = firstlevel_dir + '/betas/%s_t%d/*/pe*.nii',
+                               field_template = beta_template,
+                               base_directory=firstlevel_dir,
+                               infields=['subjid','timepoint'], 
+                               template_args={'betas':[['subjid','timepoint']]}), 
+                    name='beta_grabber')
+
+condtemplate = {'condition_key':firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt'}
+conditionlist_grabber = Node(DataGrabber(template = firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt',
+                                         sort_filelist=True,
+                                         field_template = condtemplate,
+                                         base_directory=firstlevel_dir,
+                                         infields=['subjid','timepoint'],
+                                         template_args={'condition_key':[['subjid','timepoint']]}), 
+                             name='conditionlist_grabber')
+
+sort_series = Node(Function(input_names=['betas','condition','condition_key'],
+                            output_names=['beta_list'],
+                            function=sort_beta_series), 
+                   name='sort_series')
+sort_series.iterables = [('condition',conditions)]
+
+# check power by counting how many usable low-motion trials are being included
+check_power = Node(Function(input_names=['beta_list','ntrial_min'],
+                            output_names=['power_det'], 
+                            function=check_beta_power), 
+                            name='check_power')
+check_power.inputs.ntrial_min = min_trials_for_usability
+
+# Merge PEs to 1 4D volume per condition
+merge_series = Node(Merge(dimension='t'), 
+                    name='merge_series')
+
+# Make ROI masks
+ROI_mask = Node(Binarize(out_type='nii'), 
+                name='ROI_mask')
+ROI_mask.iterables = [('min',seeds),('max',seeds)]
+ROI_mask.synchronize = True
+
+# Extract ROI beta series: input mask and in_file, output out_file
+extract_ROI_betas = Node(ImageMeants(), name='extract_ROI_betas')
+
+# Extract beta connectivity
+beta_series_conn = Node(GLM(out_file='betas.nii',
+                            out_cope='cope.nii'), 
+                        name='beta_series_conn')
+
+# Calculate brightness threshold
+calc_bright_thresh = Node(Function(input_names=['func_vol'],
+                                   output_names=['brightness_threshold'],
+                                   function=calc_brightness_threshold), 
+                          name='calc_bright_thresh')
+
+# Smooth parameter estimates- input brightness_threshold and in_file; output smoothed_file
+smooth = Node(SUSAN(fwhm=smoothing_kernel), 
+              name='smooth')
+
+# Register to MNI space
+reg_anat2mni = Node(FLIRT(out_matrix_file='transform.mat',
+                          reference=MNI_template),
+                    name='reg_anat2mni')
+
+reg_pe2mni = Node(FLIRT(apply_xfm=True,
+                        reference=MNI_template), 
+                  name='reg_pe2mni')
+
+# Apply a stricter mask now that the subject is in MNI space (it was really liberal before)
+applyMNImask = Node(ApplyMask(mask_file=MNI_mask), name ='applyMNImask')
+
+
+# In[ ]:
+
+connectivityflow = Workflow(name='connectivityflow')
+connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
+                          (infosource, datasource, [('timepoint','timepoint')]),
+                          (datasource, ROI_mask, [('segmentation','in_file')]),
+                          (ROI_mask, extract_ROI_betas, [('binary_file','mask')]),
+                          (extract_ROI_betas, beta_series_conn, [('out_file','design')]),
+                          
+                          (infosource, beta_grabber,[('subjid','subjid')]),
+                          (infosource, beta_grabber,[('timepoint','timepoint')]),
+                          (infosource, conditionlist_grabber,[('subjid','subjid')]),
+                          (infosource, conditionlist_grabber,[('timepoint','timepoint')]),
+                          (beta_grabber, sort_series, [('betas','betas')]),
+                          (conditionlist_grabber, sort_series, [('condition_key','condition_key')]),
+                          (sort_series, check_power, [('beta_list','beta_list')]),
+                          (sort_series, merge_series, [('beta_list','in_files')]),
+                          (merge_series, extract_ROI_betas, [('merged_file','in_file')]),
+                          (merge_series, beta_series_conn, [('merged_file','in_file')]),
+                          
+                          (datasource, reg_anat2mni, [('struct','in_file')]),
+                          (reg_anat2mni, reg_pe2mni, [('out_matrix_file','in_matrix_file')]),
+                          (beta_series_conn, reg_pe2mni, [('out_file','in_file')]),
+                          (reg_pe2mni, calc_bright_thresh, [('out_file','func_vol')]),
+                          (calc_bright_thresh, smooth, [('brightness_threshold','brightness_threshold')]),
+                          (reg_pe2mni, smooth, [('out_file','in_file')]),
+                          (smooth, applyMNImask, [('smoothed_file','in_file')]),
+                          
+                          (ROI_mask, datasink, [('binary_file','seed_masks')]),
+                          (check_power, datasink, [('power_det','power_check_results')]),
+                          (beta_series_conn, datasink, [('out_file','conn_beta_map')]),
+                          (beta_series_conn, datasink, [('out_p','conn_pval_map')]),
+                          (beta_series_conn, datasink, [('out_cope','conn_cope')]),
+                          (applyMNImask, datasink, [('out_file','smoothedMNI_conn_beta')]),
+                          (reg_anat2mni, datasink, [('out_file','MNIwarp_anat')])
+                         ])
+connectivityflow.base_dir = workflow_dir
+connectivityflow.write_graph(graph2use='flat')
+connectivityflow.run('MultiProc', plugin_args={'n_procs':3})
+

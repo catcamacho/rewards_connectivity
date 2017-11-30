@@ -15,7 +15,7 @@ from nipype.algorithms.misc import Gunzip
 from nipype.interfaces.freesurfer.preprocess import ReconAll, MRIConvert
 from nipype.interfaces.freesurfer.model import Binarize
 from nipype.interfaces.freesurfer import FSCommand
-from nipype.interfaces.fsl.utils import Reorient2Std, Merge
+from nipype.interfaces.fsl.utils import Reorient2Std, Merge, MotionOutliers
 from nipype.interfaces.fsl.preprocess import MCFLIRT, SliceTimer, FLIRT, FAST
 from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.algorithms.rapidart import ArtifactDetect
@@ -32,10 +32,10 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Zeus/Cat'
-#raw_dir = analysis_home + '/subjs'
-raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+#analysis_home = '/Volumes/Zeus/Cat'
+raw_dir = analysis_home + '/subjs'
+#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
@@ -150,7 +150,7 @@ fsprocflow.connect([(infosource,structgrabber,[('subjid','subjid')]),
                    ])
 fsprocflow.base_dir = workflow_dir
 fsprocflow.write_graph(graph2use='flat')
-fsprocflow.run('MultiProc', plugin_args={'n_procs': 16})
+#fsprocflow.run('MultiProc', plugin_args={'n_procs': 16})
 
 
 # In[ ]:
@@ -267,15 +267,16 @@ def bandpass_filter(in_file, lowpass, highpass, TR):
     config.enable_debug_mode()
     logging.update_logging(config)
     
-    out_file = 'func_filtered'
-    call(['3dBandpass', '-prefix', out_file,'-dt', str(TR), str(highpass), str(lowpass), in_file])
-    filtered_file = glob(getcwd() + '/func_filtered*.BRIK*')
+    path = getcwd()
+    out_file_name = 'func_filtered'
+    call(['3dBandpass', '-prefix', out_file_name,'-dt', str(TR), str(highpass), str(lowpass), in_file])
+    filtered_file = glob(path + '/func_filtered*.BRIK*')
     call(["gunzip", filtered_file[0]])
-    new_file = getcwd() +'/func_filtered+orig.BRIK'
+    new_file = path +'/func_filtered+orig.BRIK'
     call(["3dAFNItoNIFTI", new_file])
-    nii_file = glob(getcwd() + '/*.nii.gz')
+    nii_file = glob(path + '/*.nii*')
     call(["gunzip", nii_file[0]])
-    out_file = getcwd() + '/func_filtered.nii'
+    out_file = path + '/' + out_file_name + '.nii'
     return(out_file)
 
 
@@ -298,6 +299,15 @@ realign_runs = MapNode(MCFLIRT(out_file='rfunc.nii',
                                save_rms=True), 
                        name='realign_runs',
                        iterfield=['in_file'])
+
+# Get frame-wise displacement for each run: in_file; out_file, out_metric_plot, out_metric_values
+get_FD = MapNode(MotionOutliers(metric = 'fd',
+                                out_metric_values = 'FD.txt', 
+                                out_metric_plot = 'motionplot.png',
+                                no_motion_correction=False),
+                 name='get_FD',
+                 iterfield=['in_file'])
+
 
 # Slice time correction: in_file, slice_time_corrected_file
 slicetime = MapNode(SliceTimer(time_repetition=TR, 
@@ -459,13 +469,6 @@ denoise = Node(GLM(out_res_name='denoised_residuals.nii',
                    out_data_name='denoised_func.nii'), 
                name='denoise')
 
-# Nuissance regression -ICA AROMA:  
-    # motion_parameters, in_file; aggr_denoised_file, nonaggr_denoised_file
-    # --> removed 9/27/17 because the included/required masks weren't in the correct space
-#ica_aroma = Node(ICA_AROMA(TR=TR,
-#                           denoise_type='both'), 
-#                 name='ica_aroma')
-
 
 # In[ ]:
 
@@ -570,6 +573,7 @@ preprocflow.connect([(infosource,get_fsID,[('subjid','subjid')]),
                      (funcgrabber,unzip_func,[('func','in_file')]),
                      (unzip_func,reorient_func,[('out_file','in_file')]),
                      (reorient_func,realign_runs,[('out_file','in_file')]),
+                     (reorient_func,get_FD,[('out_file','in_file')]),
                      (realign_runs, slicetime,[('out_file','in_file')]),
                      (slicetime,reg_func_to_anat,[('slice_time_corrected_file','in_file')]),
                      (slicetime,apply_reg_to_func,[('slice_time_corrected_file','in_file')]),
@@ -596,10 +600,12 @@ preprocflow.connect([(infosource,get_fsID,[('subjid','subjid')]),
                      (realign_merged,make_checkmask_img,[('out_file','epi')]),
                      (binarize_anat,make_checkmask_img,[('binary_file','brainmask')]),
                      
-                     (merge_func,datasink,[('merged_file','merged_func')]),
+                     (get_FD, datasink, [('out_metric_plot','FD_out_metric_plot')]),
+                     (get_FD, datasink, [('out_metric_values','FD_out_metric_values')]),
+                     #(merge_func,datasink,[('merged_file','merged_func')]),
                      (make_coreg_img,datasink,[('coreg_file','coregcheck_image')]),
                      (make_checkmask_img,datasink,[('maskcheck_file','maskcheck_image')]),
-                     (mask_func, datasink,[('out_file','orig_merged_func')]),
+                     #(mask_func, datasink,[('out_file','orig_merged_func')]),
                      (reorient_anat,datasink,[('out_file','preproc_anat')]),
                      (reorient_aseg,datasink,[('out_file','aseg')]),
                      (binarize_anat,datasink,[('binary_file','binarized_anat')]),
@@ -611,10 +617,5 @@ preprocflow.connect([(infosource,get_fsID,[('subjid','subjid')]),
                     ])
 preprocflow.base_dir = workflow_dir
 preprocflow.write_graph(graph2use='flat')
-preprocflow.run('MultiProc', plugin_args={'n_procs': 16})
-
-
-# In[ ]:
-
-
+preprocflow.run('MultiProc', plugin_args={'n_procs': 2})
 
