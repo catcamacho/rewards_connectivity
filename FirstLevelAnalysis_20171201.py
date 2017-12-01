@@ -222,6 +222,10 @@ def hrf_fitting_onsets(timing_bunch):
             del onsets[i-r]
             del durations[i-r]
             r = r + 1
+        elif '_hm' in conditions_names[i]:
+            del onsets[i-r]
+            del durations[i-r]
+            r = r + 1
     
     hrf_fit_bunch = []
     hrf_fit_bunch.insert(0,Bunch(conditions=['HR_Event'],
