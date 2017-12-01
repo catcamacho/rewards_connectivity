@@ -616,5 +616,5 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                          ])
 connectivityflow.base_dir = workflow_dir
 connectivityflow.write_graph(graph2use='flat')
-connectivityflow.run('MultiProc', plugin_args={'n_procs'16})
+connectivityflow.run('MultiProc', plugin_args={'n_procs':16})
 
