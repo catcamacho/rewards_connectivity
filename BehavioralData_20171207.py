@@ -94,16 +94,19 @@ for subjid in subjects_list:
     run_timing_list = glob(raw_dir + '/%d/%d_*/timing/*score_timing.txt'% (subjid,timepoint))
     
     subject_df = timing_bars(run_timing_list,motion, motion_thresh, BOLD_window, subjid, timepoint, behavior_dir)
+    sub_df_usable = subject_df[subject_df['acc'] == 1]
     sub_neut = subject_df[subject_df['cond'] == 'neutral']
+    sub_neut_usable = sub_neut[sub_neut['acc'] == 1]
     sub_pun = subject_df[subject_df['cond'] == 'punish']
+    sub_pun_usable = sub_pun[sub_pun['acc'] == 1]
     
-    summary_data.loc[sub_index,'num_use_total'] = subject_df.shape[0]
+    summary_data.loc[sub_index,'num_use_total'] = sub_df_usable.shape[0]
     summary_data.loc[sub_index,'lat_total'] = subject_df['lat'].mean()
     summary_data.loc[sub_index,'lat_total_std'] = subject_df['lat'].std()
-    summary_data.loc[sub_index,'num_use_neut'] = sub_neut.shape[0]
+    summary_data.loc[sub_index,'num_use_neut'] = sub_neut_usable.shape[0]
     summary_data.loc[sub_index,'mean_lat_neut'] = sub_neut['lat'].mean()
     summary_data.loc[sub_index,'std_lat_neut'] = sub_neut['lat'].std()
-    summary_data.loc[sub_index,'num_use_pun'] = sub_pun.shape[0]
+    summary_data.loc[sub_index,'num_use_pun'] = sub_pun_usable.shape[0]
     summary_data.loc[sub_index,'mean_lat_pun'] = sub_pun['lat'].mean()
     summary_data.loc[sub_index,'std_lat_pun'] = sub_pun['lat'].std()
     summary_data.loc[sub_index,'mot_pun'] = sub_pun['motion'].mean()
@@ -114,16 +117,19 @@ for subjid in subjects_list:
     summary_data.loc[sub_index,'acc_neut'] = sub_neut['acc'].mean()
     
     lm_df = subject_df[subject_df['mot_cat'] == 'low']
+    lm_df_usable = lm_df[lm_df['acc'] == 1]
     sub_neut = lm_df[lm_df['cond'] == 'neutral']
+    sub_neut_usable = sub_neut[sub_neut['acc'] == 1]
     sub_pun = lm_df[lm_df['cond'] == 'punish']
+    sub_pun_usable = sub_pun[sub_pun['acc'] == 1]
     
-    summary_data.loc[sub_index,'lm_num_use_total'] = lm_df.shape[0]
+    summary_data.loc[sub_index,'lm_num_use_total'] = lm_df_usable.shape[0]
     summary_data.loc[sub_index,'lm_lat_total'] = subject_df['lat'].mean()
     summary_data.loc[sub_index,'lm_lat_total_std'] = lm_df['lat'].std()
-    summary_data.loc[sub_index,'lm_num_use_neut'] = sub_neut.shape[0]
+    summary_data.loc[sub_index,'lm_num_use_neut'] = sub_neut_usable.shape[0]
     summary_data.loc[sub_index,'lm_mean_lat_neut'] = sub_neut['lat'].mean()
     summary_data.loc[sub_index,'lm_std_lat_neut'] = sub_neut['lat'].std()
-    summary_data.loc[sub_index,'lm_num_use_pun'] = sub_pun.shape[0]
+    summary_data.loc[sub_index,'lm_num_use_pun'] = sub_pun_usable.shape[0]
     summary_data.loc[sub_index,'lm_mean_lat_pun'] = sub_pun['lat'].mean()
     summary_data.loc[sub_index,'lm_std_lat_pun'] = sub_pun['lat'].std()
     summary_data.loc[sub_index,'lm_mot_pun'] = sub_pun['motion'].mean()
@@ -134,16 +140,19 @@ for subjid in subjects_list:
     summary_data.loc[sub_index,'lm_acc_neut'] = sub_neut['acc'].mean()
     
     hm_df = subject_df[subject_df['mot_cat'] == 'high']
+    hm_df_usable = hm_df[hm_df['acc'] == 1]
     sub_neut = hm_df[hm_df['cond'] == 'neutral']
+    sub_neut_usable = sub_neut[sub_neut['acc'] == 1]
     sub_pun = hm_df[hm_df['cond'] == 'punish']
+    sub_pun_usable = sub_pun[sub_pun['acc'] == 1]
     
-    summary_data.loc[sub_index,'hm_num_use_total'] = hm_df.shape[0]
+    summary_data.loc[sub_index,'hm_num_use_total'] = hm_df_usable.shape[0]
     summary_data.loc[sub_index,'hm_lat_total'] = subject_df['lat'].mean()
     summary_data.loc[sub_index,'hm_lat_total_std'] = hm_df['lat'].std()
-    summary_data.loc[sub_index,'hm_num_use_neut'] = sub_neut.shape[0]
+    summary_data.loc[sub_index,'hm_num_use_neut'] = sub_neut_usable.shape[0]
     summary_data.loc[sub_index,'hm_mean_lat_neut'] = sub_neut['lat'].mean()
     summary_data.loc[sub_index,'hm_std_lat_neut'] = sub_neut['lat'].std()
-    summary_data.loc[sub_index,'hm_num_use_pun'] = sub_pun.shape[0]
+    summary_data.loc[sub_index,'hm_num_use_pun'] = sub_pun_usable.shape[0]
     summary_data.loc[sub_index,'hm_mean_lat_pun'] = sub_pun['lat'].mean()
     summary_data.loc[sub_index,'hm_std_lat_pun'] = sub_pun['lat'].std()
     summary_data.loc[sub_index,'hm_mot_pun'] = sub_pun['motion'].mean()
