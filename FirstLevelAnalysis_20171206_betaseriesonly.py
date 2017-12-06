@@ -334,7 +334,7 @@ modelspec = Node(SpecifyModel(time_repetition=TR,
 extract_betas = Node(FitGLM(TR=TR,
                             plot_design_matrix=True,
                             save_residuals=True,
-                            drift_model ='Blank'), 
+                            drift_model ='Polynomial'), 
                      name='extract_betas')
 
 
@@ -381,7 +381,7 @@ hrffit_model = Node(SpecifyModel(time_repetition=TR,
 HRFfitting = Node(FitGLM(TR=TR,
                          plot_design_matrix=True,
                          save_residuals=True, 
-                         drift_model ='Blank'), 
+                         drift_model ='Polynomial'), 
                   name='HRFfitting')
 
 est_contrast = Node(EstimateContrast(), 
