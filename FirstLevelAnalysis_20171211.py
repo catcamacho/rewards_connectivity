@@ -8,12 +8,13 @@ from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.preprocess import FLIRT, SUSAN
-from nipype.interfaces.fsl.utils import Merge, ImageMeants
-from nipype.interfaces.fsl.model import GLM, Level1Design, FEATModel, FILMGLS
+from nipype.interfaces.fsl.utils import Merge, ImageMeants, Split
+from nipype.interfaces.fsl.model import GLM, Level1Design, FEATModel, GLM
 from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.algorithms.modelgen import SpecifyModel
+from nipype.interfaces.nipy.model import FitGLM, EstimateContrast
 from nipype.interfaces.freesurfer.model import Binarize
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, read_csv
 
 # MATLAB setup - Specify path to current SPM and the MATLAB's default mode
 from nipype.interfaces.matlab import MatlabCommand
@@ -39,7 +40,7 @@ MNI_template = template_dir + '/MNI152_T1_3mm_brain.nii'
 MNI_mask = template_dir + '/MNI152_T1_3mm_mask.nii'
 
 #pull subject info to iter over
-subject_info = DataFrame.from_csv(analysis_home + '/misc/subjs.csv')
+subject_info = read_csv(analysis_home + '/misc/subjs.csv', index_col=0)
 subjects_list = subject_info['SubjID'].tolist()
 timepoints = subject_info['Timepoint'].tolist()
 
@@ -134,15 +135,10 @@ def timing_bars(run_timing_list, motion, motion_thresh, BOLD_window):
         df.loc[:,'trial'] = (k*100) + df.loc[:,'trial']
         k = k+1
     df_full = concat(dfs,ignore_index=True)
-    df_full = df_full.sort(['runNum','time_hyp'], ascending=[1,1])
+    df_full = df_full.sort_values(['runNum','time_hyp'], ascending=[1,1])
     df_full.loc[:,'motion'] = motion_fd
     
-    # Sort out trials that are both complete and received a response
-    #df_responded = df_full[df_full.loc[:,'Count'] == 1]
-    #df_responded = df_responded[df_responded.loc[:,'catch']==0]
-
     # Sort out trial onsets for the condition of interest
-    #df_condition = df_responded[df_responded.loc[:,'cond']==condition]
     df_trial = df_full[df_full.loc[:,'stim']=='cue']
     
     # Add additional label to the trials with high motion
@@ -154,9 +150,11 @@ def timing_bars(run_timing_list, motion, motion_thresh, BOLD_window):
         if sum(excess_vols) >= 3:
             df_trial.loc[index,'mot_cat'] = 'high'    
     
+    # Sort out trials that are both complete and received a response
     df_fulltrials = df_trial[df_trial.loc[:, 'catch'] == 0]
     df_responded = df_fulltrials[df_fulltrials.loc[:, 'Count'] == 1]
     
+    # Sort trials for labeling purposes
     lowmotion = df_responded[df_trial.loc[:, 'mot_cat'] == 'low']
     highmotion = df_responded[df_trial.loc[:, 'mot_cat'] == 'high']
     catch1 = df_trial[df_trial.loc[:, 'catch'] == 1]
@@ -222,6 +220,10 @@ def hrf_fitting_onsets(timing_bunch):
             del onsets[i-r]
             del durations[i-r]
             r = r + 1
+        elif '_hm' in conditions_names[i]:
+            del onsets[i-r]
+            del durations[i-r]
+            r = r + 1
     
     hrf_fit_bunch = []
     hrf_fit_bunch.insert(0,Bunch(conditions=['HR_Event'],
@@ -256,7 +258,7 @@ def beta_contrasts(timing_bunch):
     # Create the list of lists for the full contrast info
     contrasts_list = []
     for a in range(0,num_cons):
-        con = [conditions_names[a], 'T', conditions_names, boolean_con_lists[a]]
+        con = (conditions_names[a], 'T', conditions_names, boolean_con_lists[a])
         contrasts_list.append(con)
         
     return(contrasts_list)
@@ -320,10 +322,7 @@ generateModel = Node(FEATModel(),
                      name='generateModel')
 
 # Run GLM
-extract_betas = Node(FILMGLS(threshold=-1000, 
-                             fit_armodel=False,
-                             smooth_autocorr=False,
-                             full_data=True), 
+extract_betas = Node(GLM(out_file = 'betas.nii'), 
                      name='extract_betas')
 
 
@@ -359,15 +358,15 @@ hrffitdesign = Node(Level1Design(bases={'dgamma':{'derivs': False}},
 genHRFfitModel = Node(FEATModel(), 
                       name='genHRFfitModel')
 
-# Run GLM
-HRFfitting = Node(FILMGLS(threshold=-1000, 
-                          fit_armodel=False,
-                          smooth_autocorr=False,
-                          full_data=True), 
-                  name='HRFfitting')
+#run the GLM
+HRFfitting = Node(GLM(out_file = 'betas.nii', 
+                      out_cope='cope.nii',
+                      out_t_name = 'tstat.nii'), 
+                  name= 'HRFfitting')
 
+#Create a mask out of the outputs
 thresh_HRFfit_map = MapNode(Binarize(abs=True, 
-                                     min=0.3),
+                                     min=2),
                             name='thresh_HRFfit_map', 
                             iterfield = ['in_file'])
 
@@ -391,8 +390,8 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (modelspec, level1design, [('session_info','session_info')]),
                         (level1design,generateModel, [('ev_files','ev_files')]),
                         (level1design,generateModel, [('fsf_files','fsf_file')]),
-                        (generateModel,extract_betas, [('design_file','design_file')]),
-                        (generateModel,extract_betas, [('con_file','tcon_file')]),
+                        (generateModel,extract_betas, [('design_file','design')]),
+                        (generateModel,extract_betas, [('con_file','contrasts')]),
                         (datasource,extract_betas, [('func','in_file')]),
                         (pull_timing,save_beta_list, [('timing_bunch','timing_bunch')]),
                         
@@ -404,24 +403,23 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                         (hrffit_model, hrffitdesign, [('session_info','session_info')]),
                         (hrffitdesign, genHRFfitModel, [('ev_files','ev_files')]),
                         (hrffitdesign, genHRFfitModel, [('fsf_files','fsf_file')]),
-                        (genHRFfitModel, HRFfitting, [('design_file','design_file')]),
-                        (genHRFfitModel, HRFfitting, [('con_file','tcon_file')]),
+                        (genHRFfitModel, HRFfitting, [('design_file','design')]),
+                        (genHRFfitModel, HRFfitting, [('con_file','contrasts')]),
                         (datasource,HRFfitting, [('func','in_file')]),
-                        (HRFfitting, thresh_HRFfit_map, [('param_estimates','in_file')]),
+                        (HRFfitting, thresh_HRFfit_map, [('out_t','in_file')]),
                         
                         (save_beta_list,datasink, [('condition_file','condition_file')]),
-                        (extract_betas,datasink,[('copes','copes')]),
-                        (extract_betas,datasink,[('param_estimates','betas')]),
-                        (extract_betas,datasink,[('tstats','tstats')]),
+                        (extract_betas,datasink,[('out_cope','copes')]),
+                        (extract_betas,datasink,[('out_file','betas')]),
                         (generateModel,datasink,[('design_image','design_image')]),
-                        (HRFfitting,datasink,[('param_estimates','HRFfit_betas')]),
-                        (HRFfitting,datasink,[('copes','HRFfit_copes')]),
-                        (HRFfitting,datasink,[('tstats','HRFfit_tstats')]),
+                        (HRFfitting,datasink,[('out_file','HRFfit_betas')]),
+                        (HRFfitting,datasink,[('out_t','HRFfit_Tstats')]),
+                        (HRFfitting,datasink,[('out_p','HRFfit_pmaps')]),
                         (thresh_HRFfit_map, datasink, [('binary_file','HRFfitMask')])
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
-betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
+#betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
 
 
 # In[ ]:
@@ -452,24 +450,18 @@ def sort_beta_series(betas, condition, condition_key):
     logging.update_logging(config)
     from os.path import dirname
     
-    cond_betas = []
-    for s in betas:
-        if condition in s:
-            cond_betas.append(s)
-
-    num_pes = len(cond_betas)
-    beta_dir = dirname(cond_betas[0])
-
-    for t in condition_key:
-        if condition in t:
-            text_file = open(t, 'r')
-            cond_keys = text_file.read().splitlines()
-            text_file.close()
-
+    # sort split beta volumes just in case
+    betas = sorted(betas)
+    
+    # read in condition list
+    cond_file = open(condition_key,'r')
+    condition_list = cond_file.read().splitlines()
+    cond_file.close()
+    
     beta_list = []
-    for u in range(0,len(cond_keys)):
-        if 'lm' in cond_keys[u]:
-            beta_list.append(beta_dir + '/pe' + str(u+1) + '.nii')
+    for s in range(0,len(condition_list)):
+        if condition + '_lm' in condition_list[s]:
+            cond_betas.append(betas[s])
 
     return(beta_list)
 
@@ -499,29 +491,20 @@ def check_beta_power(beta_list, ntrial_min):
 ## Connectivity nodes
 
 # grab files
-beta_template = {'betas':firstlevel_dir + '/betas/%s_t%d/*/pe*.nii'}
-beta_grabber = Node(DataGrabber(sort_filelist=True,
-                               template = firstlevel_dir + '/betas/%s_t%d/*/pe*.nii',
-                               field_template = beta_template,
-                               base_directory=firstlevel_dir,
-                               infields=['subjid','timepoint'], 
-                               template_args={'betas':[['subjid','timepoint']]}), 
-                    name='beta_grabber')
-
-condtemplate = {'condition_key':firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt'}
-conditionlist_grabber = Node(DataGrabber(template = firstlevel_dir + '/condition_file/%s_t%d/*/betanames.txt',
-                                         sort_filelist=True,
-                                         field_template = condtemplate,
-                                         base_directory=firstlevel_dir,
-                                         infields=['subjid','timepoint'],
-                                         template_args={'condition_key':[['subjid','timepoint']]}), 
-                             name='conditionlist_grabber')
+conn_template = {'betas':firstlevel_dir + '/betas/{subjid}_t{timepoint}/betas.nii',
+                 'condition_key':firstlevel_dir + '/condition_file/{subjid}_t{timepoint}/betanames.txt',
+                 'task_mask': firstlevel_dir + '/HRFfitMask/{subjid}_t{timepoint}/_thresh_HRFfit_map0/tstat_thresh.nii'}
+conn_datagrabber = Node(SelectFiles(conn_template), 
+                        name='conn_datagrabber')
 
 sort_series = Node(Function(input_names=['betas','condition','condition_key'],
                             output_names=['beta_list'],
                             function=sort_beta_series), 
                    name='sort_series')
 sort_series.iterables = [('condition',conditions)]
+
+# Split the beta series 4D volume
+split_betas = Node(Split(dimension='t'), name='split_betas')
 
 # check power by counting how many usable low-motion trials are being included
 check_power = Node(Function(input_names=['beta_list','ntrial_min'],
@@ -580,15 +563,15 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                           (ROI_mask, extract_ROI_betas, [('binary_file','mask')]),
                           (extract_ROI_betas, beta_series_conn, [('out_file','design')]),
                           
-                          (infosource, beta_grabber,[('subjid','subjid')]),
-                          (infosource, beta_grabber,[('timepoint','timepoint')]),
-                          (infosource, conditionlist_grabber,[('subjid','subjid')]),
-                          (infosource, conditionlist_grabber,[('timepoint','timepoint')]),
-                          (beta_grabber, sort_series, [('betas','betas')]),
+                          (infosource, conn_datagrabber,[('subjid','subjid')]),
+                          (infosource, conn_datagrabber,[('timepoint','timepoint')]),
+                          (conn_datagrabber, split_betas, [('betas','in_file')]),
+                          (split_betas, sort_series, [('out_files','betas')]),
                           (conditionlist_grabber, sort_series, [('condition_key','condition_key')]),
                           (sort_series, check_power, [('beta_list','beta_list')]),
                           (sort_series, merge_series, [('beta_list','in_files')]),
                           (merge_series, extract_ROI_betas, [('merged_file','in_file')]),
+                          (conn_datagrabber, beta_series_conn, [('task_mask','mask')]),
                           (merge_series, beta_series_conn, [('merged_file','in_file')]),
                           
                           (datasource, reg_anat2mni, [('struct','in_file')]),
@@ -600,6 +583,7 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                           (smooth, applyMNImask, [('smoothed_file','in_file')]),
                           
                           (ROI_mask, datasink, [('binary_file','seed_masks')]),
+                          (sort_series, datasink, [('beta_list','beta_list')]),
                           (check_power, datasink, [('power_det','power_check_results')]),
                           (beta_series_conn, datasink, [('out_file','conn_beta_map')]),
                           (beta_series_conn, datasink, [('out_p','conn_pval_map')]),
@@ -609,5 +593,5 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                          ])
 connectivityflow.base_dir = workflow_dir
 connectivityflow.write_graph(graph2use='flat')
-connectivityflow.run('MultiProc', plugin_args={'n_procs':3})
+connectivityflow.run('MultiProc', plugin_args={'n_procs':2})
 
