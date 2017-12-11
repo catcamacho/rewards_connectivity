@@ -26,10 +26,10 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-#analysis_home = '/Volumes/Zeus/Cat'
-raw_dir = analysis_home + '/subjs'
-#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+analysis_home = '/Volumes/Zeus/Cat'
+#raw_dir = analysis_home + '/subjs'
+raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
 preproc_dir = analysis_home + '/proc/preprocessing'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
@@ -419,7 +419,7 @@ betaseriesflow.connect([(infosource, datasource,[('subjid','subjid')]),
                        ])
 betaseriesflow.base_dir = workflow_dir
 betaseriesflow.write_graph(graph2use='flat')
-#betaseriesflow.run('MultiProc', plugin_args={'n_procs': 2})
+betaseriesflow.run('MultiProc', plugin_args={'n_procs': 20})
 
 
 # In[ ]:
@@ -460,8 +460,8 @@ def sort_beta_series(betas, condition, condition_key):
     
     beta_list = []
     for s in range(0,len(condition_list)):
-        if condition + '_lm' in condition_list[s]:
-            cond_betas.append(betas[s])
+        if condition in condition_list[s]:
+            beta_list.append(betas[s])
 
     return(beta_list)
 
@@ -567,7 +567,7 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                           (infosource, conn_datagrabber,[('timepoint','timepoint')]),
                           (conn_datagrabber, split_betas, [('betas','in_file')]),
                           (split_betas, sort_series, [('out_files','betas')]),
-                          (conditionlist_grabber, sort_series, [('condition_key','condition_key')]),
+                          (conn_datagrabber, sort_series, [('condition_key','condition_key')]),
                           (sort_series, check_power, [('beta_list','beta_list')]),
                           (sort_series, merge_series, [('beta_list','in_files')]),
                           (merge_series, extract_ROI_betas, [('merged_file','in_file')]),
@@ -593,5 +593,5 @@ connectivityflow.connect([(infosource, datasource, [('subjid','subjid')]),
                          ])
 connectivityflow.base_dir = workflow_dir
 connectivityflow.write_graph(graph2use='flat')
-connectivityflow.run('MultiProc', plugin_args={'n_procs':2})
+connectivityflow.run('MultiProc', plugin_args={'n_procs':20})
 
