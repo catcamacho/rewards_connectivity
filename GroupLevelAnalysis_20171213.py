@@ -24,15 +24,12 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-#analysis_home = '/Volumes/Zeus/Cat'
-raw_dir = analysis_home + '/subjs'
-#raw_dir = '/Volumes/Phillips/bars/APWF_bars/subjs'
+#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+analysis_home = '/Volumes/Zeus/Cat'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
 workflow_dir = analysis_home + '/workflows'
 template_dir = analysis_home + '/templates'
-MNI_template = template_dir + '/MNI152_T1_1mm_brain.nii'
 MNI_mask = template_dir + '/MNI152_T1_3mm_mask.nii'
 
 
