@@ -175,9 +175,7 @@ merge = Node(Merge(dimension='t'), name='merge')
 # Linear mixed effects modeling
 lmemodel = Node(Function(input_names = ['model', 'mask', 'subject_dataframe', 
                                         'subject_files', 'grouping_variable'], 
-                         output_names = ['BIC','AIC','pval_intercept', 'pval_age', 
-                                         'pval_sex', 'pval_ageSexInteract', 
-                                         'residuals', 'pred_values'], 
+                         output_names = ['output_volumes'], 
                          function=mri_lmem), 
                 name='lmemodel')
 lmemodel.iterables = [('model', models)]
@@ -203,14 +201,7 @@ LMEManalysisflow.connect([(conditionsource, betamap_grabber, [('condition','cond
                                                               ('seed','seed')]),
                           (betamap_grabber, merge, [('beta_maps','in_files')]),
                           (lmemodel, [('merged_file','subject_files')]),
-                          (lmemodel, datasink, [('BIC','BIC'), 
-                                                ('AIC','AIC'),
-                                                ('pval_intercept','pval_intercept'), 
-                                                ('pval_age','pval_age'), 
-                                                ('pval_sex','pval_sex'), 
-                                                ('pval_ageSexInteract','pval_ageSexInteract'),
-                                                ('residuals','residuals'),
-                                                ('pred_values','pred_values')])
+                          (lmemodel, datasink, [('output_volumes','output_volumes')])
                          ])
 LMEManalysisflow.base_dir = workflow_dir
 LMEManalysisflow.write_graph(graph2use='flat')
