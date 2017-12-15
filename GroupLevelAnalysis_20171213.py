@@ -24,8 +24,8 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Zeus/Cat'
+analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+#analysis_home = '/Volumes/Zeus/Cat'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
 workflow_dir = analysis_home + '/workflows'
@@ -36,12 +36,15 @@ MNI_mask = template_dir + '/MNI152_T1_3mm_mask.nii'
 #pull subject info 
 subject_info = analysis_home + '/misc/subjs_all.csv'
 
-conditions = ['punish','neutral']
-seed_names = ['L_amyg','R_amyg']
+conditions = ['punish']
+seed_names = ['R_amyg']
+#conditions = ['punish','neutral']
+#seed_names = ['L_amyg','R_amyg']
 
 # Group analysis models (predicting FC)
-models = ['brain ~ ageMC + sex + ageMC*sex', 
-          'brain ~ invAgeMC + sex + invAgeMC*sex']
+models = ['brain ~ ageMC + sex + ageMC*sex']
+#models = ['brain ~ ageMC + sex + ageMC*sex', 
+#          'brain ~ invAgeMC + sex + invAgeMC*sex']
 
 
 # In[ ]:
@@ -58,6 +61,8 @@ def mri_lmem(model, mask, subject_dataframe, subject_files, grouping_variable):
     from nibabel import load, save, Nifti1Image
     from numpy import array, empty_like, stack, nditer, zeros_like, zeros
     from pandas import DataFrame, read_csv, Series, concat
+    from warnings import filterwarnings
+    filterwarnings("ignore")
 
     working_dir = getcwd() + '/'
     subj_data = read_csv(subject_dataframe, header=0, index_col=0)
@@ -109,26 +114,27 @@ def mri_lmem(model, mask, subject_dataframe, subject_files, grouping_variable):
 
                 
     # Save the ouputs as nifti files
-    output_data = [BIC_data, AIC_data, pval_intercept_data, pval_invAge_data,
+    output_data = [BIC_data, AIC_data, pval_intercept_data, pval_age_data,
                     pval_sex_data, pval_ageSexInteract_data, residuals_data, 
                     pred_values_data]
-    output_niftis = [Nifti1Image(result, brain_niftis[0].affine) for result in output_data]
+    output_niftis = [Nifti1Image(result, mask_nifti.affine) for result in output_data]
     
     output_filenames = ['BICs.nii','AICs.nii','pval_intercept_data.nii',
                         'pval_age_data.nii','pval_sex_data.nii',
                         'pval_ageSexInteract_data.nii','residuals_data.nii',
                         'pred_values_data.nii']
-    for e in output_niftis:
-        save(e, working_dir + output_filenames[e.index])
+    for e in range(0,len(output_niftis)):
+        save(output_niftis[e], working_dir + output_filenames[e])
     
-    output_volumes = {'BIC':abspath(output_filenames[0]),
-                      'AIC':abspath(output_filenames[1]),
-                      'pval_intercept': abspath(output_filenames[2]), 
-                      'pval_age': abspath(output_filenames[3]), 
-                      'pval_sex': abspath(output_filenames[4]), 
-                      'pval_ageSexInteract':abspath(output_filenames[5]), 
-                      'residuals':abspath(output_filenames[6]), 
-                      'pred_values':abspath(output_filenames[7])}
+    output_volumes = [abspath(output_filenames[0]),
+                      abspath(output_filenames[1]),
+                      abspath(output_filenames[2]), 
+                      abspath(output_filenames[3]), 
+                      abspath(output_filenames[4]), 
+                      abspath(output_filenames[5]), 
+                      abspath(output_filenames[6]), 
+                      abspath(output_filenames[7])]
+    
     
     return(output_volumes)
 
@@ -169,9 +175,7 @@ datasink = Node(DataSink(substitutions=substitutions,
 # Linear mixed effects modeling
 lmemodel = Node(Function(input_names = ['model', 'mask', 'subject_dataframe', 
                                         'subject_files', 'grouping_variable'], 
-                         output_names = ['BIC','AIC','pval_intercept', 'pval_age', 
-                                         'pval_sex', 'pval_ageSexInteract', 
-                                         'residuals', 'pred_values'], 
+                         output_names = ['output_volumes'], 
                          function=mri_lmem), 
                 name='lmemodel')
 lmemodel.iterables = [('model', models)]
@@ -196,30 +200,9 @@ LMEManalysisflow = Workflow(name='LMEManalysisflow')
 LMEManalysisflow.connect([(conditionsource, betamap_grabber, [('condition','condition'),
                                                               ('seed','seed')]),
                           (betamap_grabber, lmemodel, [('beta_maps','subject_files')]),
-                          (lmemodel, datasink, [('BIC','BIC'), 
-                                                ('AIC','AIC'),
-                                                ('pval_intercept','pval_intercept'), 
-                                                ('pval_age','pval_age'), 
-                                                ('pval_sex','pval_sex'), 
-                                                ('pval_ageSexInteract','pval_ageSexInteract'),
-                                                ('residuals','residuals'),
-                                                ('pred_values','pred_values')])
+                          (lmemodel, datasink, [('output_volumes','output_volumes')])
                          ])
 LMEManalysisflow.base_dir = workflow_dir
 LMEManalysisflow.write_graph(graph2use='flat')
-LMEManalysisflow.run('MultiProc', plugin_args={'n_procs':2})
-
-
-# In[ ]:
-
-#lme_template = 
-#lme_datagrabber = 
-
-
-# In[ ]:
-
-#clusterflow = Workflow(name='clusterflow')
-#clusterflow.connect([(mask_stat, cluster_results, [('out_file','in_file')]),
-#                     (cluster_results, datasink, [('index_file','cluster_index_file'), 
-#                                                  ('localmax_txt_file','cluster_localmax_txt_file')])])
+LMEManalysisflow.run()
 
