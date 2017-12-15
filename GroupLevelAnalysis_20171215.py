@@ -24,8 +24,8 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-analysis_home = '/Volumes/Zeus/Cat'
+analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+#analysis_home = '/Volumes/Zeus/Cat'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
 workflow_dir = analysis_home + '/workflows'
@@ -200,7 +200,7 @@ LMEManalysisflow = Workflow(name='LMEManalysisflow')
 LMEManalysisflow.connect([(conditionsource, betamap_grabber, [('condition','condition'),
                                                               ('seed','seed')]),
                           (betamap_grabber, merge, [('beta_maps','in_files')]),
-                          (lmemodel, [('merged_file','subject_files')]),
+                          (merge, lmemodel, [('merged_file','subject_files')]),
                           (lmemodel, datasink, [('output_volumes','output_volumes')])
                          ])
 LMEManalysisflow.base_dir = workflow_dir
