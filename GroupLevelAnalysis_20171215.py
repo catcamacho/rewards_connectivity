@@ -24,8 +24,8 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI')
 
 # Set study variables
-analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
-#analysis_home = '/Volumes/Zeus/Cat'
+#analysis_home = '/Users/catcamacho/Box/LNCD_rewards_connectivity'
+analysis_home = '/Volumes/Zeus/Cat'
 firstlevel_dir = analysis_home + '/proc/firstlevel'
 secondlevel_dir = analysis_home + '/proc/secondlevel'
 workflow_dir = analysis_home + '/workflows'
@@ -35,7 +35,7 @@ MNI_mask = template_dir + '/MNI152_T1_3mm_mask.nii'
 
 
 #pull subject info 
-subject_info = analysis_home + '/misc/subjs_all.csv'
+subject_info = analysis_home + '/misc/subjs.csv'
 
 conditions = ['punish','neutral']
 seed_names = ['L_amyg','R_amyg']
@@ -90,8 +90,8 @@ def mri_lmem(model, mask, subject_dataframe, subject_files, grouping_variable):
         for y in range(0,mask.shape[1]):
             for z in range(0,mask.shape[2]):
                 if mask[x][y][z] == 1:
-                    voxel = zeros(len(brain_niftis))
-                    for a in range(0,len(brain_niftis)):
+                    voxel = zeros(brain_data_4D.shape[3])
+                    for a in range(0,brain_data_4D.shape[3]):
                         voxel[a] = brain_data_4D[x][y][z][a]
                     voxel = Series(voxel, index=subj_data.index, name='brain')
                     data = concat([voxel, subj_data],axis=1)
@@ -105,7 +105,7 @@ def mri_lmem(model, mask, subject_dataframe, subject_files, grouping_variable):
                     AIC_data[x][y][z] = mod.aic
                     residuals = mod.resid
                     pred_values = Series(mod.predict(), index = subj_data.index)
-                    for d in range(0,len(brain_niftis)):
+                    for d in range(0,brain_data_4D.shape[3]):
                         residuals_data[x][y][z][d] = residuals.tolist()[d]
                         pred_values_data[x][y][z][d] = pred_values.tolist()[d]
 
