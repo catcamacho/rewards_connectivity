@@ -75,15 +75,15 @@ def mri_lmem(model, mask, subject_dataframe, subject_files, grouping_variable):
 
     ## Preallocate the output arrays
     # for the model
-    BIC_data = zeros_like(mask)
-    AIC_data = zeros_like(mask)
-    pval_intercept_data = zeros_like(mask)
-    pval_age_data = zeros_like(mask)
-    pval_sex_data = zeros_like(mask)
-    pval_ageSexInteract_data = zeros_like(mask)
+    BIC_data = zeros_like(mask).astype(float)
+    AIC_data = zeros_like(mask).astype(float)
+    pval_intercept_data = zeros_like(mask).astype(float)
+    pval_age_data = zeros_like(mask).astype(float)
+    pval_sex_data = zeros_like(mask).astype(float)
+    pval_ageSexInteract_data = zeros_like(mask).astype(float)
     # per subject
-    residuals_data = zeros_like(brain_data_4D)
-    pred_values_data = zeros_like(brain_data_4D)
+    residuals_data = zeros_like(brain_data_4D).astype(float)
+    pred_values_data = zeros_like(brain_data_4D).astype(float)
 
     # Set up the actual loops to pull in subject data and do the modeling
     for x in range(0,mask.shape[0]):
